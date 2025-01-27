@@ -452,7 +452,8 @@ class LabelPowersetClassifier(BaseEstimator):
         self.random_state = random_state
 
     def fit(self, x, y):
-        self.classifier.fit(X=x, y=y)
+        model = copy(self.classifier)
+        self.classifier = model.fit(X=x, y=y)
         return self
 
     def predict(self, x):
@@ -469,7 +470,8 @@ class PrunedSetsClassifier(BaseEstimator):
         self.random_state = random_state
 
     def fit(self, x, y):
-        self.classifier.fit(x, y)
+        model = copy(self.classifier)
+        self.classifier = model.fit(X=x, y=y)
         return self
 
     def predict(self, x):
@@ -671,6 +673,7 @@ def prune_and_subsample(y, pruning_threshold, max_sub_samples):
                 if subset not in label_map:
                     label_map[subset] = class_idx
                     class_idx += 1
+                    print(subset)
 
                 y_new.append(label_map[subset])
 
