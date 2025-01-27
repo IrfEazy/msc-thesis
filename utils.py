@@ -645,15 +645,17 @@ class MetaBinaryRelevance(BaseEstimator):
         return y_pred
 
 
-def prune_and_subsample(y, pruning_threshold, max_sub_samples):
+def prune_and_subsample(x, y, pruning_threshold, max_sub_samples):
     # Count occurrences of each label set
     label_counts = Counter(tuple(lbl_set) for lbl_set in y)
     frequent_label_sets = {k for k, v in label_counts.items() if v >= pruning_threshold}
+    x_new = []
     y_new = []
+    index_mapping = []
     label_map = {}
     class_idx = 0
 
-    for lbl_set in y:
+    for idx, lbl_set in enumerate(y):
         lbl_tuple = tuple(lbl_set)
 
         if lbl_tuple in frequent_label_sets:
@@ -662,10 +664,17 @@ def prune_and_subsample(y, pruning_threshold, max_sub_samples):
                 label_map[lbl_tuple] = class_idx
                 class_idx += 1
 
+            x_new.append(x[idx])
             y_new.append(label_map[lbl_tuple])
+            index_mapping.append(idx)
         else:
             # Subsample infrequent label sets
-            lbl_subsets = list(chain(*[combinations(lbl_tuple, r) for r in range(1, len(lbl_tuple))]))
+            lbl_subsets = []
+
+            for i in range(2 ** len(lbl_tuple)):
+                lbl_subset = tuple((lbl_tuple[j] if (i >> j) & 1 else 0) for j in range(len(lbl_tuple)))
+                lbl_subsets.append(lbl_subset)
+
             lbl_subsets = [subset for subset in lbl_subsets if subset in frequent_label_sets]
             lbl_subsets = lbl_subsets[:max_sub_samples]
 
@@ -673,11 +682,12 @@ def prune_and_subsample(y, pruning_threshold, max_sub_samples):
                 if subset not in label_map:
                     label_map[subset] = class_idx
                     class_idx += 1
-                    print(subset)
 
+                x_new.append(x[idx])
                 y_new.append(label_map[subset])
+                index_mapping.append(idx)
 
-    return np.array(y_new), {v: k for k, v in label_map.items()}
+    return np.array(x_new), np.array(y_new), {v: k for k, v in label_map.items()}, np.array(index_mapping)
 
 
 def assess_models(
