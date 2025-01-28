@@ -1,8 +1,9 @@
 from collections import Counter
 from copy import copy
-from itertools import combinations, chain
+from itertools import combinations
 from typing import Optional, Union, Any, Dict, Tuple, List
 
+import numpy
 import numpy as np
 from bayes_opt import BayesianOptimization
 from imblearn.over_sampling import SMOTE
@@ -537,6 +538,7 @@ class ConditionalDependencyNetwork(BaseEstimator):
         """
         # Initialize labels randomly
         y_current = np.random.randint(0, 2, size=(x.shape[0], self.num_labels))
+        y_stationary = np.zeros_like(a=y_current)
 
         for iteration in range(self.num_iterations):
             for label_idx in range(self.num_labels):
@@ -597,7 +599,7 @@ class MetaBinaryRelevance(BaseEstimator):
             )[:, 1]
             # Train on the full training set and generate predictions
             model.fit(X=x, y=y[:, label_idx])
-            #predictions = model.predict_proba(X=x)[:, 1]
+            # predictions = model.predict_proba(X=x)[:, 1]
 
             self.stage1_models.append(model)
             stage1_predictions[:, label_idx] = predictions
@@ -645,7 +647,31 @@ class MetaBinaryRelevance(BaseEstimator):
         return y_pred
 
 
-def prune_and_subsample(x, y, pruning_threshold, max_sub_samples):
+def prune_and_subsample(
+        x: list[Any],
+        y: list[list[Any]],
+        pruning_threshold: float,
+        max_sub_samples: int
+) -> tuple[
+    numpy.ndarray[Any, numpy.dtype],
+    numpy.ndarray[Any, numpy.dtype],
+    dict[int, Union[tuple[Any, ...], tuple[int, ...]]],
+    numpy.ndarray[Any, numpy.dtype]
+]:
+    """
+    Prune and subsample the given samples.
+
+    Parameters
+    ----------
+    x
+    y
+    pruning_threshold
+    max_sub_samples
+
+    Returns
+    -------
+
+    """
     # Count occurrences of each label set
     label_counts = Counter(tuple(lbl_set) for lbl_set in y)
     frequent_label_sets = {k for k, v in label_counts.items() if v >= pruning_threshold}
@@ -693,7 +719,8 @@ def prune_and_subsample(x, y, pruning_threshold, max_sub_samples):
 def assess_models(
         x: np.ndarray[Any, np.dtype[float]],
         y: np.ndarray[Any, np.dtype[int]],
-        technique: dict[str, Any]
+        technique: dict[str, Any],
+        classes: List[str]
 ) -> dict[str, Any]:
     model_performance = {
         'Accuracy': 0
@@ -774,6 +801,11 @@ def assess_models(
             )
 
             model_performance['Coverage'] = coverage_error(y_true=y, y_score=y_predict)
+            model_performance['Classification'] = classification_report(
+                y_true=y,
+                y_pred=y_predict,
+                target_names=classes
+            )
 
     return model_performance
 
@@ -781,6 +813,6 @@ def assess_models(
 def display_assessments(evaluation: dict):
     for k in evaluation.keys():
         print(f'{k}:')
-        print(f"Best classifier: {evaluation[k]['classifier']}")
-        print(f"Accuracy:\t{evaluation[k]['accuracy']:.2f}")
-        print(evaluation[k]['classification'])
+        print(f"Best classifier: {evaluation[k]['Classifier']}")
+        print(f"Accuracy:\t{evaluation[k]['Accuracy']:.2f}")
+        print(evaluation[k]['Classification'])
