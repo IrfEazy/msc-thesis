@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Tuple, DefaultDict, Union, Optional, Iterable
 
 import numpy as np
+import pydot
 
 
 def extract_keys(d: Union[dict, object], path: Optional[Iterable] = None) -> list:
@@ -159,3 +160,19 @@ def preprocess_texts(list_str: list[str], model_path: Path, embedding_dim: int) 
                 continue
 
     return list_embedded_str
+
+
+def map_targets(watson_list, fix_targets):
+    targets = set(fix_targets.keys()) & set(watson_list)
+    mapped_targets = {fix_targets[category] for category in targets}
+    return list(mapped_targets) if mapped_targets else ['other']
+
+
+def add_edges(graph, parent, children):
+    for child, sub_children in children.items():
+        graph.add_edge(pydot.Edge(parent, child))
+        add_edges(
+            graph=graph,
+            parent=child,
+            children=sub_children
+        )
