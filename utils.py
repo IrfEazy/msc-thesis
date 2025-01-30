@@ -804,7 +804,8 @@ def assess_models(
             model_performance['Classification'] = classification_report(
                 y_true=y,
                 y_pred=y_predict,
-                target_names=classes
+                target_names=classes,
+                zero_division=0
             )
 
     return model_performance
