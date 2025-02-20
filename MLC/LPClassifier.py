@@ -1,25 +1,37 @@
+from typing import cast
+
 import numpy
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, hamming_loss, f1_score
-from sklearn.utils.validation import check_array, check_X_y
+from sklearn.utils.validation import check_X_y
+from tqdm.notebook import tqdm
+from typing_extensions import TypeVar
+
+from MLC.preconditions import check_same_rows, check_binary_matrices
 
 
 class LPClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator=None):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000)):
         """
         Initialize the Label Powerset classifier.
 
         Parameters
         ----------
-        base_estimator : classifier object, default=LogisticRegression(max_iter=1000)
+        base_estimator : ClassifierMixin
             The multi-class classifier to be used on the transformed problem.
         """
-        if base_estimator is None:
-            base_estimator = LogisticRegression(max_iter=1000)
+        self.classifier_ = None
+        self.class_to_label_ = None
+        self.class_label_matrix_ = None
+        self.label_to_class_ = None
+        self.n_labels_ = None
         self.base_estimator = base_estimator
 
-    def fit(self, X, Y):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def fit(self, X: ArrayLike, Y: ArrayLike) -> "LPClassifier":
         """
         Fit the Label Powerset classifier.
 
@@ -28,14 +40,14 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
-        Y : array-like of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             The binary indicator matrix for labels.
 
         Returns
         -------
-        self : object
+        self : "LPClassifier"
             Fitted estimator.
         """
         X, Y = check_X_y(X, Y, multi_output=True)
@@ -53,18 +65,18 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         Y_transformed = numpy.array([self.label_to_class_[tuple(row)] for row in Y])
 
         # Train the multi-class classifier.
-        self.classifier_ = clone(self.base_estimator)
+        T = TypeVar("T", bound=ClassifierMixin)
+        self.classifier_: T = cast(T, clone(self.base_estimator))
         self.classifier_.fit(X, Y_transformed)
 
         # Precompute a matrix of label sets for each class.
         n_classes = len(self.class_to_label_)
         self.class_label_matrix_ = numpy.zeros((n_classes, self.n_labels_), dtype=int)
-        for class_idx, label_arr in self.class_to_label_.items():
+        for class_idx, label_arr in tqdm(self.class_to_label_.items(), desc="Training for each classifier"):
             self.class_label_matrix_[class_idx, :] = label_arr
-
         return self
 
-    def predict(self, X):
+    def predict(self, X: ArrayLike) -> ArrayLike:
         """
         Predict multi-label outputs for the given data.
 
@@ -73,20 +85,19 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input samples.
 
         Returns
         -------
-        Y_pred : ndarray of shape (n_samples, n_labels)
+        Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
-        X = check_array(X)
         Y_class_pred = self.classifier_.predict(X)
         Y_pred = numpy.array([self.class_to_label_[cls] for cls in Y_class_pred])
         return Y_pred
 
-    def predict_proba(self, X):
+    def predict_proba(self, X: ArrayLike) -> ArrayLike:
         """
         Predict marginal probabilities for each label.
 
@@ -96,24 +107,23 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input samples.
-
 
         Returns
         -------
-        Y_proba : ndarray of shape (n_samples, n_labels)
+        Y_proba : ArrayLike of shape (n_samples, n_labels)
             The estimated probability for each label.
         """
-
-        X = check_array(X)
         # Get multi-class probability estimates.
         proba = self.classifier_.predict_proba(X)  # shape: (n_samples, n_classes)
         # Compute marginal probabilities: dot the probability matrix with the class label matrix.
         Y_proba = numpy.dot(proba, self.class_label_matrix_)
         return Y_proba
 
-    def evaluate(self, X, Y_true):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def evaluate(self, X: ArrayLike, Y_true: ArrayLike) -> dict[str, float]:
         """
         Evaluate the Label Powerset classifier using standard multi-label metrics.
 
@@ -124,17 +134,16 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input samples.
-        Y_true : array-like of shape (n_samples, n_labels)
+        Y_true : ArrayLike of shape (n_samples, n_labels)
             The true binary indicator matrix for labels.
 
         Returns
         -------
-        metrics : dict
+        metrics : dict[str, float]
             A dictionary containing accuracy, hamming loss, and micro F1 score.
         """
-        Y_true = numpy.array(Y_true)
         Y_pred = self.predict(X)
         accuracy = accuracy_score(Y_true, Y_pred)
         hamming = hamming_loss(Y_true, Y_pred)
