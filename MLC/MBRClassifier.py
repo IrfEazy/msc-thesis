@@ -1,28 +1,39 @@
+from typing import cast
+
 import numpy
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
-from sklearn.utils import check_X_y, check_array
+from sklearn.utils import check_X_y
+from typing_extensions import TypeVar
+
+from MLC.preconditions import check_same_rows, check_binary_matrices
 
 
 class MBRClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: object = None, meta_estimator: object = None):
+    def __init__(
+            self,
+            base_estimator: ClassifierMixin = LogisticRegression(),
+            meta_estimator: ClassifierMixin = LogisticRegression()
+    ):
         """
         Parameters
         ----------
-        base_estimator : scikit-learn binary classifier, default=LogisticRegression()
+        base_estimator : ClassifierMixin
             The classifier used in the first (BR) stage.
-        meta_estimator : scikit-learn binary classifier, default=LogisticRegression()
-            The classifier used in the the second (meta) stage.
+        meta_estimator : ClassifierMixin
+            The classifier used in the second (meta) stage.
         """
-        if base_estimator is None:
-            base_estimator = LogisticRegression()
-        if meta_estimator is None:
-            meta_estimator = LogisticRegression()
+        self.meta_classifiers_ = None
+        self.first_stage_classifiers_ = None
+        self.n_labels_ = None
         self.base_estimator = base_estimator
         self.meta_estimator = meta_estimator
 
-    def fit(self, X: numpy.ndarray, Y: numpy.ndarray):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def fit(self, X: ArrayLike, Y: ArrayLike) -> "MBRClassifier":
         """
         Fit the Meta Binary Relevance classifier.
 
@@ -32,14 +43,14 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The training input samples.
-        Y : numpy.ndarray of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             The binary indicator matrix for labels.
 
         Returns
         -------
-        self : object
+        self : "MBRClassifier"
             Returns self.
         """
         # Validate inputs and convert Y to numpy array
@@ -52,33 +63,33 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         # First Stage: Binary Relevance
         # ------------------------
         self.first_stage_classifiers_ = []
+        T = TypeVar("T", bound=ClassifierMixin)
         for i in range(n_labels):
-            clf = clone(self.base_estimator)
+            clf: T = cast(T, clone(self.base_estimator))
             clf.fit(X, Y[:, i])
             self.first_stage_classifiers_.append(clf)
 
         # Generate first-stage predictions on training data.
         # We assume that the estimator has a predict_proba method.
-        first_stage_preds = numpy.zeros((n_samples, n_labels))
+        first_stage_predictions = numpy.zeros((n_samples, n_labels))
         for i in range(n_labels):
             # Use probability for the positive class
-            first_stage_preds[:, i] = self.first_stage_classifiers_[i].predict_proba(X)[:, 1]
+            first_stage_predictions[:, i] = self.first_stage_classifiers_[i].predict_proba(X)[:, 1]
 
         # Augment the original features with the first-stage predictions.
-        X_meta = numpy.hstack((X, first_stage_preds))
+        X_meta = numpy.hstack((X, first_stage_predictions))
 
         # ------------------------
         # Second Stage: Meta-Level Binary Relevance
         # ------------------------
         self.meta_classifiers_ = []
         for i in range(n_labels):
-            clf = clone(self.meta_estimator)
+            clf: T = cast(T, clone(self.meta_estimator))
             clf.fit(X_meta, Y[:, i])
             self.meta_classifiers_.append(clf)
-
         return self
 
-    def predict_proba(self, X: numpy.ndarray):
+    def predict_proba(self, X: ArrayLike) -> ArrayLike:
         """
         Predict probability estimates for each label.
 
@@ -88,24 +99,23 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
 
         Returns
         -------
-        proba : numpy.ndarray of shape (n_samples, n_labels)
+        proba : ArrayLike of shape (n_samples, n_labels)
             Probability estimates for each label.
         """
-        X = check_array(X)
         n_samples = X.shape[0]
 
         # First-stage predictions on new data.
-        first_stage_preds = numpy.zeros((n_samples, self.n_labels_))
+        first_stage_predictions = numpy.zeros((n_samples, self.n_labels_))
         for i in range(self.n_labels_):
-            first_stage_preds[:, i] = self.first_stage_classifiers_[i].predict_proba(X)[:, 1]
+            first_stage_predictions[:, i] = self.first_stage_classifiers_[i].predict_proba(X)[:, 1]
 
         # Augment original features with first-stage predictions.
-        X_meta = numpy.hstack((X, first_stage_preds))
+        X_meta = numpy.hstack((X, first_stage_predictions))
 
         # Second-stage (meta) predictions.
         proba = numpy.zeros((n_samples, self.n_labels_))
@@ -113,7 +123,7 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
             proba[:, i] = self.meta_classifiers_[i].predict_proba(X_meta)[:, 1]
         return proba
 
-    def predict(self, X: numpy.ndarray):
+    def predict(self, X: ArrayLike):
         """
         Predict the multi-label outputs for each instance.
 
@@ -121,19 +131,21 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input data.
 
         Returns
         -------
-        predictions : numpy.ndarray of shape (n_samples, n_labels)
+        predictions : ArrayLike of shape (n_samples, n_labels)
             Binary predictions for each label.
         """
         proba = self.predict_proba(X)
         predictions = (proba > 0.5).astype(int)
         return predictions
 
-    def evaluate(self, X: numpy.ndarray, Y_true: numpy.ndarray):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def evaluate(self, X: ArrayLike, Y_true: ArrayLike):
         """
         Evaluate the classifier using standard multi-label metrics.
 
@@ -144,9 +156,9 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
-        Y_true : numpy.ndarray of shape (n_samples, n_labels)
+        Y_true : ArrayLike of shape (n_samples, n_labels)
             True binary indicator matrix of labels.
 
         Returns
@@ -154,7 +166,6 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         metrics : dict
             Dictionary containing accuracy, micro F1 score, and hamming loss.
         """
-        Y_true = numpy.array(Y_true)
         Y_pred = self.predict(X)
         acc = accuracy_score(Y_true, Y_pred)
         f1 = f1_score(Y_true, Y_pred, average="micro")
