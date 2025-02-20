@@ -1,34 +1,47 @@
+from typing import Optional, cast
+
 import numpy
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, hamming_loss, f1_score
-from sklearn.utils.validation import check_array, check_X_y
+from typing_extensions import TypeVar
+
+from MLC.preconditions import check_same_rows, check_binary_matrices
 
 
 class RAkELClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator=None, k=3, n_estimators=None, random_state=None):
+    def __init__(
+            self,
+            base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+            k: int = 3,
+            n_estimators: Optional[int] = None,
+            random_state: Optional[int] = None
+    ):
         """
         Initialize the Random k-Labelsets (RAkEL) classifier.
 
         Parameters
         ----------
-        base_estimator : classifier object, default=LogisticRegression(max_iter=1000)
+        base_estimator : ClassifierMixin
             The multi-class classifier to be used on each k-labelset LP problem.
-        k : int, default=3
+        k : int
             The number of labels in each randomly chosen label subset.
-        n_estimators : int or None, default=None
+        n_estimators : Optional[int]
             The number of LP classifiers to ensemble. If None, it is set to 2 * q, where q is the number of labels.
-        random_state : int or None, default=None
+        random_state : Optional[int]
             Seed for random number generation.
         """
-        if base_estimator is None:
-            base_estimator = LogisticRegression(max_iter=1000)
+        self.ensemble_ = None
+        self.q_ = None
         self.base_estimator = base_estimator
         self.k = k
         self.n_estimators = n_estimators  # Will be set in fit() if None.
         self.random_state = random_state
 
-    def fit(self, X, Y):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def fit(self, X: ArrayLike, Y: ArrayLike) -> "RAkELClassifier":
         """
         Fit the RAkEL classifier.
 
@@ -38,17 +51,16 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
-        Y : array-like of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             The binary indicator matrix for labels.
 
         Returns
         -------
-        self : object
+        self : "RAkELClassifier"
             Fitted estimator.
         """
-        X, Y = check_X_y(X, Y, multi_output=True)
         Y = numpy.array(Y)
         n_samples, q = Y.shape
         self.q_ = q
@@ -78,7 +90,8 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
             Y_transformed = numpy.array([mapping[target] for target in targets])
 
             # Train a clone of the base estimator on (X, Y_transformed).
-            clf = clone(self.base_estimator)
+            T = TypeVar("T", bound=ClassifierMixin)
+            clf: T = cast(T, clone(self.base_estimator))
             clf.fit(X, Y_transformed)
 
             # Save the ensemble component.
@@ -91,7 +104,7 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
 
         return self
 
-    def predict(self, X):
+    def predict(self, X: ArrayLike, threshold: float = 0.5) -> ArrayLike:
         """
         Predict multi-label outputs for the given data.
 
@@ -101,15 +114,16 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input samples.
+        threshold : float
+            Probability thresholding.
 
         Returns
         -------
-        Y_pred : ndarray of shape (n_samples, n_labels)
+        Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
-        X = check_array(X)
         n_samples = X.shape[0]
         # Initialize vote counts and classifier inclusion counts.
         votes = numpy.zeros((n_samples, self.q_))
@@ -122,9 +136,9 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
             reverse_mapping = component['reverse_mapping']
 
             # Predict the class for each instance.
-            preds = clf.predict(X)
+            predictions = clf.predict(X)
             # Map predictions back to binary vectors for the chosen k-labelset.
-            pred_binary = numpy.array([reverse_mapping[pred] for pred in preds])  # Shape: (n_samples, k)
+            pred_binary = numpy.array([reverse_mapping[pred] for pred in predictions])  # Shape: (n_samples, k)
 
             # For each label in the subset, update votes and tau.
             for idx, label in enumerate(subset):
@@ -134,10 +148,10 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
         # Compute vote ratio; avoid division by zero.
         ratio = numpy.divide(votes, tau, out=numpy.zeros_like(votes), where=tau != 0)
         # Predict label as relevant if the vote ratio exceeds 0.5.
-        Y_pred = (ratio > 0.5).astype(int)
+        Y_pred = (ratio > threshold).astype(int)
         return Y_pred
 
-    def predict_proba(self, X):
+    def predict_proba(self, X: ArrayLike) -> ArrayLike:
         """
         Predict marginal probabilities for each label.
 
@@ -146,15 +160,14 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input samples.
 
         Returns
         -------
-        Y_proba : ndarray of shape (n_samples, n_labels)
+        Y_proba : ArrayLike of shape (n_samples, n_labels)
             The estimated probability for each label.
         """
-        X = check_array(X)
         n_samples = X.shape[0]
         votes = numpy.zeros((n_samples, self.q_))
         tau = numpy.zeros((n_samples, self.q_))
@@ -164,8 +177,8 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
             clf = component['classifier']
             reverse_mapping = component['reverse_mapping']
 
-            preds = clf.predict(X)
-            pred_binary = numpy.array([reverse_mapping[pred] for pred in preds])
+            predictions = clf.predict(X)
+            pred_binary = numpy.array([reverse_mapping[pred] for pred in predictions])
 
             for idx, label in enumerate(subset):
                 votes[:, label] += pred_binary[:, idx]
@@ -174,7 +187,9 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
         Y_proba = numpy.divide(votes, tau, out=numpy.zeros_like(votes), where=tau != 0)
         return Y_proba
 
-    def evaluate(self, X, Y_true):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def evaluate(self, X: ArrayLike, Y_true: ArrayLike) -> dict[str, float]:
         """
         Evaluate the RAkEL classifier using common multi-label metrics.
 
@@ -185,17 +200,16 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input samples.
-        Y_true : array-like of shape (n_samples, n_labels)
+        Y_true : ArrayLike of shape (n_samples, n_labels)
             The true binary label matrix.
 
         Returns
         -------
-        metrics : dict
+        metrics : dict[str, float]
             A dictionary containing 'accuracy', 'hamming_loss', and 'f1_micro'.
         """
-        Y_true = numpy.array(Y_true)
         Y_pred = self.predict(X)
         accuracy = accuracy_score(Y_true, Y_pred)
         hamming = hamming_loss(Y_true, Y_pred)
