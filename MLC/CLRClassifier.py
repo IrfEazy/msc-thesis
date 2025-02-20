@@ -1,51 +1,57 @@
+from typing import cast
+
 import numpy
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
-from sklearn.utils import check_X_y, check_array
+from tqdm.notebook import tqdm
+from typing_extensions import TypeVar
+
+from MLC.preconditions import check_same_rows, check_binary_matrices
 
 
 class CLRClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator=None):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression()):
         """
         Parameters
         ----------
         base_estimator : scikit-learn classifier, default=LogisticRegression()
             The base binary classifier to be used for both pairwise and auxiliary classifiers.
         """
-        if base_estimator is None:
-            base_estimator = LogisticRegression()
-        self.base_estimator = base_estimator
         self.q_ = None
         self.pairwise_classifiers_ = None
         self.aux_classifiers_ = None
+        self.base_estimator = base_estimator
 
-    def fit(self, X: numpy.ndarray, Y: numpy.ndarray) -> object:
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def fit(self, X: ArrayLike, Y: ArrayLike) -> "CLRClassifier":
         """
         Fit the Calibrated Label Ranking classifier.
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The training input samples.
-        Y : numpy.ndarray of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             Binary indicator matrix with 1 indicating that the label is relevant.
 
         Returns
         -------
-        self : object
+        self : CLRClassifier
         """
         # Validate inputs
-        X, Y = check_X_y(X, Y, multi_output=True, accept_sparse=True)
         Y = numpy.array(Y)
         n_samples, self.q_ = Y.shape
 
         # Initialize dictionaries for pairwise and auxiliary classifiers
         self.pairwise_classifiers_ = {}
         self.aux_classifiers_ = {}
+        T = TypeVar("T", bound=ClassifierMixin)
 
         # Train pairwise classifiers for each pair (j, k), j < k
-        for j in range(self.q_):
+        for j in tqdm(range(self.q_), desc="Training for each pairwise classifier"):
             for k in range(j + 1, self.q_):
                 X_pair = []
                 y_pair = []
@@ -58,24 +64,18 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
                 if len(X_pair) > 0:
                     X_pair = numpy.array(X_pair)
                     y_pair = numpy.array(y_pair)
-                    clf = clone(self.base_estimator)
-                    if hasattr(clf, "fit"):
-                        clf.fit(X_pair, y_pair)
-                    else:
-                        raise Exception("Base estimator does not have a fit function")
+                    clf: T = cast(T, clone(self.base_estimator))
+                    clf.fit(X_pair, y_pair)
                     self.pairwise_classifiers_[(j, k)] = clf
-        # Train auxiliary classifiers (for each label vs. the virtual label)
-        for j in range(self.q_):
-            clf_aux = clone(self.base_estimator)
-            if hasattr(clf_aux, "fit"):
-                clf_aux.fit(X, Y[:, j])
-            else:
-                raise Exception("Base estimator does not have a fit function")
-            self.aux_classifiers_[j] = clf_aux
 
+        # Train auxiliary classifiers (for each label vs. the virtual label)
+        for j in tqdm(range(self.q_), desc="Training for each auxiliary classifier"):
+            clf_aux: T = cast(T, clone(self.base_estimator))
+            clf_aux.fit(X, Y[:, j])
+            self.aux_classifiers_[j] = clf_aux
         return self
 
-    def predict_proba(self, X: numpy.ndarray) -> numpy.ndarray:
+    def predict_proba(self, X: ArrayLike) -> ArrayLike:
         """
         Compute calibrated scores for each label.
 
@@ -85,29 +85,22 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters:
         -----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
 
         Returns
         -------
-        calibrated_scores : numpy.ndarray of shape (n_samples, n_labels)
+        calibrated_scores : ArrayLike of shape (n_samples, n_labels)
             Calibrated scores for each label. A positive score suggests relevance.
         """
-        X = check_array(X, accept_sparse=True)
-        if hasattr(X, "shape"):
-            n_samples = X.shape[0]
-        else:
-            raise Exception("Input samples do not have shape function")
+        n_samples = X.shape[0]
         votes = numpy.zeros((n_samples, self.q_))
 
         # Aggregate votes from pairwise classifiers
-        for (j, k), clf in self.pairwise_classifiers_.items():
-            if hasattr(clf, "predict"):
-                preds = clf.predict(X)
-            else:
-                raise Exception("Classifiers do not have a predict function")
+        for (j, k), clf in tqdm(self.pairwise_classifiers_.items(), desc="Predicting for each pairwise classifier"):
+            predictions = clf.predict(X)
             # For each sample, if prediction is 1 then label j wins; otherwise label k wins.
-            for i, pred in enumerate(preds):
+            for i, pred in enumerate(predictions):
                 if pred == 1:
                     votes[i, j] += 1
                 else:
@@ -118,24 +111,16 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
 
         # Obtain auxiliary probabilities for each label
         aux_probs = numpy.zeros((n_samples, self.q_))
-        for j, clf in self.aux_classifiers_.items():
+        for j, clf in tqdm(self.aux_classifiers_.items(), desc="Predicting for each auxiliary classifier"):
             # Assuming the estimator has a predict_proba method;
             # otherwise one might use decision_function and calibrate it.
-            if hasattr(clf, "predict_proba"):
-                aux_probs[:, j] = clf.predict_proba(X)[:, 1]
-            else:
-                if hasattr(clf, "decision_function"):
-                    aux_probs[:, j] = clf.decision_function(X)
-                    # Apply sigmoid to convert to probabilities
-                    aux_probs[:, j] = 1 / (1 + numpy.exp(-aux_probs[:, j]))
-                else:
-                    raise Exception("Classifiers have neither predict_proba and decision_function functions")
+            aux_probs[:, j] = clf.predict_proba(X)[:, 1]
 
         # Calibrated score: if norm_votes exceed the auxiliary probability, label is deemed relevant.
         calibrated_scores = norm_votes - aux_probs
         return calibrated_scores
 
-    def predict(self, X: numpy.ndarray) -> numpy.ndarray:
+    def predict(self, X: ArrayLike) -> ArrayLike:
         """
         Predict the multi-label set for each instance.
 
@@ -143,19 +128,21 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
 
         Returns
         -------
-        predictions : numpy.ndarray of shape (n_samples, n_labels)
+        predictions : ArrayLike of shape (n_samples, n_labels)
             Binary indicator matrix of predicted labels.
         """
         calibrated_scores = self.predict_proba(X)
         predictions = (calibrated_scores > 0).astype(int)
         return predictions
 
-    def evaluate(self, X: numpy.ndarray, Y_true: numpy.ndarray) -> dict:
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
         Evaluate the classifier using standard multi-label metrics.
 
@@ -166,19 +153,18 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
-        Y_true : numpy.ndarray of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             True binary indicator matrix of labels.
 
         Returns
         -------
-        metrics : dict
+        metrics : dict[str, float]
             Dictionary containing accuracy, micro F1 score, and hamming loss.
         """
-        Y_true = numpy.array(Y_true)
         Y_pred = self.predict(X)
-        acc = accuracy_score(Y_true, Y_pred)
-        f1 = f1_score(Y_true, Y_pred, average="micro")
-        hamming = hamming_loss(Y_true, Y_pred)
+        acc = accuracy_score(Y, Y_pred)
+        f1 = f1_score(Y, Y_pred, average="micro")
+        hamming = hamming_loss(Y, Y_pred)
         return {"accuracy": acc, "f1_micro": f1, "hamming_loss": hamming}
