@@ -5,8 +5,9 @@ from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, hamming_loss, f1_score
+from tqdm.notebook import tqdm
 
-from preconditions import check_same_rows, check_binary_matrices
+from .preconditions import check_same_rows, check_binary_matrices
 
 
 class BRClassifier(BaseEstimator, ClassifierMixin):
@@ -36,13 +37,13 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
 
         Returns
         -------
-        self : object
+        self : "BRClassifier"
         """
         n_labels = Y.shape[1]
         self.classifiers_ = []
         T = TypeVar("T", bound=ClassifierMixin)
 
-        for i in range(n_labels):
+        for i in tqdm(range(n_labels), desc="Training for each label"):
             clf: T = cast(T, clone(self.base_classifier))
             clf.fit(X, Y[:, i])
             self.classifiers_.append(clf)
@@ -65,8 +66,10 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         n_samples = X.shape[0]
         n_labels = len(self.classifiers_)
         Y_pred = numpy.zeros((n_samples, n_labels))
+        T = TypeVar("T", bound=ClassifierMixin)
 
-        for i, clf in enumerate(self.classifiers_):
+        for i, clf in enumerate(tqdm(self.classifiers_, desc="Predicting for each classifier")):
+            clf: T = cast(T, clf)
             Y_pred[:, i] = clf.predict(X)
         return Y_pred
 
@@ -87,8 +90,10 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         n_samples = X.shape[0]
         n_labels = len(self.classifiers_)
         Y_proba = numpy.zeros((n_samples, n_labels))
+        T = TypeVar("T", bound=ClassifierMixin)
 
-        for i, clf in enumerate(self.classifiers_):
+        for i, clf in enumerate(tqdm(self.classifiers_, desc="Predicting for each classifier")):
+            clf: T = cast(T, clf)
             Y_proba[:, i] = clf.predict_proba(X)[:, 1]
         return Y_proba
 
@@ -108,7 +113,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         Returns
         -------
         metrics : dict[str, float]
-            A dictionary containing evaluation metrics.
+            Dictionary containing accuracy, micro F1 score, and hamming loss.
         """
         Y_pred = self.predict(X)
         accuracy = accuracy_score(Y, Y_pred)
