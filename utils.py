@@ -1,12 +1,19 @@
+import re
+import unicodedata
 from collections import Counter
 from copy import copy
 from itertools import combinations
-from typing import Optional, Union, Any, Dict, Tuple, List
+from typing import Optional, Union, Any, Dict, Tuple, List, Callable
 
+import nltk
 import numpy
 import numpy as np
+import pandas as pd
 from bayes_opt import BayesianOptimization
 from imblearn.over_sampling import SMOTE
+from nltk import WordNetLemmatizer, word_tokenize
+from nltk.corpus import stopwords
+from sentence_transformers import SentenceTransformer
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -17,7 +24,17 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils import compute_sample_weight
+from tqdm.notebook import tqdm
 from xgboost import XGBClassifier
+
+from preprocess_functions import get_wordnet_pos
+
+# Ensure necessary NLTK resources are downloaded
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('universal_tagset')
+nltk.download('stopwords')
 
 BASE_CLASSIFIERS = {
     'logistic_regression': LogisticRegression,
@@ -403,7 +420,7 @@ class ChainOfClassifiers(BaseEstimator):
         x_augmented = x.copy()
 
         # Randomize label order
-        np.random.shuffle(x=self.label_order)
+        np.random.shuffle(self.label_order)
 
         # Sequentially train classifiers in the chain
         for _, label_idx in enumerate(self.label_order):
@@ -681,7 +698,7 @@ def prune_and_subsample(
     label_map = {}
     class_idx = 0
 
-    for idx, lbl_set in enumerate(y):
+    for idx, lbl_set in enumerate(tqdm(y)):
         lbl_tuple = tuple(lbl_set)
 
         if lbl_tuple in frequent_label_sets:
@@ -817,3 +834,273 @@ def display_assessments(evaluation: dict):
         print(f"Best classifier: {evaluation[k]['Classifier']}")
         print(f"Accuracy:\t{evaluation[k]['Accuracy']:.2f}")
         print(evaluation[k]['Classification'])
+
+
+def sentence_embedding(sentence, tokenizer, model):
+    """
+    Generate a BERT embedding for a single sentence.
+
+    Args:
+        sentence (str): Input sentence.
+        tokenizer: BERT tokenizer.
+        model: BERT model.
+
+    Returns:
+        numpy.ndarray: Sentence embedding.
+    """
+    inputs = tokenizer(sentence, return_tensors='pt', truncation=True, padding=True)
+    outputs = model(**inputs)
+    return np.array(outputs.last_hidden_state.mean(dim=1).detach().numpy()).squeeze()
+
+
+def embed_sentences(sentences, tokenizer, model):
+    """
+    Generate BERT embeddings for a list of sentences.
+
+    Args:
+        sentences (list): List of sentences.
+        tokenizer: BERT tokenizer.
+        model: BERT model.
+
+    Returns:
+        list: List of sentence embeddings.
+    """
+    embeddings = []
+    sentences = [replace_text_components(text=s) for s in sentences]
+    sentences = [clean_text(text=s) for s in sentences]
+    sentences = [lemmatize_text(text=s) for s in sentences]
+    sentences = [remove_stopwords(text=s) for s in sentences]
+    for sentence in sentences:
+        embedding = sentence_embedding(sentence, tokenizer, model)
+        embeddings.append(embedding)
+    return embeddings
+
+
+def embed_sentences_batch(sentences, tokenizer, model, batch_size=32):
+    embeddings = []
+    sentences = [replace_text_components(text=s) for s in sentences]
+    sentences = [clean_text(text=s) for s in sentences]
+    sentences = [lemmatize_text(text=s) for s in sentences]
+    sentences = [remove_stopwords(text=s) for s in sentences]
+    for i in range(0, len(sentences), batch_size):
+        batch = sentences[i:i + batch_size]
+        inputs = tokenizer(batch, return_tensors='pt', truncation=True, padding=True, max_length=512)
+        outputs = model(**inputs)
+        batch_embeddings = outputs.last_hidden_state.mean(dim=1).detach().numpy()
+        embeddings.extend(batch_embeddings)
+    return embeddings
+
+
+def replace_text_components(text, replace_emails=True, replace_urls=True, replace_mentions=True, replace_hashtags=True,
+                            replace_phone_numbers=True, custom_replacements=None):
+    """
+    Replace specific text components (e.g., emails, URLs, mentions, hashtags) with placeholders.
+
+    Args:
+        text (str): Input text to process.
+        replace_emails (bool): Whether to replace email addresses. Default is True.
+        replace_urls (bool): Whether to replace URLs. Default is True.
+        replace_mentions (bool): Whether to replace mentioned users. Default is True.
+        replace_hashtags (bool): Whether to replace hashtags. Default is True.
+        replace_phone_numbers (bool): Whether to replace phone numbers. Default is True.
+        custom_replacements (dict): Custom replacement rules as a dictionary. Default is None.
+
+    Returns:
+        str: Text with specified components replaced.
+    """
+    # Replace email addresses
+    if replace_emails:
+        text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '', text)
+
+    # Replace URLs
+    if replace_urls:
+        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+
+    # Replace mentioned users
+    if replace_mentions:
+        text = re.sub(r'@\w+', '', text)
+
+    # Replace hashtags
+    if replace_hashtags:
+        text = re.sub(r'#\w+', '', text)  # Remove hashtags entirely
+
+    # Replace phone numbers
+    if replace_phone_numbers:
+        text = re.sub(r'\b(?:\+\d{1,2}\s?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}\b', '', text)
+
+    # Apply custom replacements if provided
+    if custom_replacements is not None:
+        for pattern, replacement in custom_replacements.items():
+            text = re.sub(pattern, replacement, text)
+
+    return text
+
+
+def clean_text(text, remove_punctuation=True, remove_emojis=True, normalize_whitespace=True, lowercase=True):
+    """
+    Clean and preprocess text data for machine learning tasks.
+
+    Args:
+        text (str): Input text to be cleaned.
+        remove_punctuation (bool): Whether to remove punctuation. Default is True.
+        remove_emojis (bool): Whether to remove emojis and emoticons. Default is True.
+        normalize_whitespace (bool): Whether to normalize whitespace. Default is True.
+        lowercase (bool): Whether to convert text to lowercase. Default is True.
+
+    Returns:
+        str: Cleaned and preprocessed text.
+    """
+    # Convert text to lowercase if specified
+    if lowercase:
+        text = text.lower()
+
+    # Remove punctuation if specified
+    if remove_punctuation:
+        text = re.sub(r'[^\w\s]', '', text)
+
+    # Normalize whitespace if specified
+    if normalize_whitespace:
+        text = re.sub(r'\s+', ' ', text).strip()
+
+    # Remove emojis and emoticons if specified
+    if remove_emojis:
+        # Remove emojis and emoticons using Unicode ranges
+        text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+        # Remove additional emoticons and symbols
+        text = re.sub(r'[\u2600-\u26FF\u2700-\u27BF]', '', text)
+
+    # Normalize Unicode characters (e.g., convert accented characters to their base form)
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8', 'ignore')
+
+    return text
+
+
+def lemmatize_text(text, lemmatizer=WordNetLemmatizer()):
+    """
+    Lemmatize text using WordNetLemmatizer with POS tagging for better accuracy.
+
+    Args:
+        text (str): Input text to be lemmatized.
+        lemmatizer (WordNetLemmatizer): Lemmatizer instance. Default is WordNetLemmatizer().
+
+    Returns:
+        str: Lemmatized text.
+    """
+    # Tokenize the text
+    tokens = word_tokenize(text)
+
+    # Get POS tags for each token
+    pos_tags = nltk.pos_tag(tokens)
+
+    # Lemmatize each token with its corresponding POS tag
+    lemmatized_tokens = []
+    for token, tag in pos_tags:
+        wordnet_pos = get_wordnet_pos(tag)  # Convert Treebank tag to WordNet POS
+        lemmatized_token = lemmatizer.lemmatize(token, pos=wordnet_pos)
+        lemmatized_tokens.append(lemmatized_token)
+
+    # Join the lemmatized tokens into a single string
+    return ' '.join(lemmatized_tokens)
+
+
+def remove_stopwords(text, language='english', custom_stopwords=None, lowercase=True):
+    """
+    Remove stopwords from the input text.
+
+    Args:
+        text (str): Input text to process.
+        language (str): Language of the stopwords. Default is 'english'.
+        custom_stopwords (set): Custom set of stopwords to use. Default is None.
+        lowercase (bool): Whether to convert text to lowercase before processing. Default is True.
+
+    Returns:
+        str: Text with stopwords removed.
+    """
+    # Convert text to lowercase if specified
+    if lowercase:
+        text = text.lower()
+
+    # Tokenize the text
+    tokens = word_tokenize(text)
+
+    # Load stopwords
+    if custom_stopwords is not None:
+        stop_words = set(custom_stopwords)
+    else:
+        stop_words = set(stopwords.words(language))
+
+    # Remove stopwords
+    filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
+
+    # Join the filtered tokens into a single string
+    return ' '.join(filtered_tokens)
+
+
+def tokenizer_transform(
+        x: pd.Series,
+        embedder_addr: str,
+        preprocessing_list: Optional[list[Callable[[str], str]]] = None,
+) -> np.ndarray[Any, np.dtype[Any]]:
+    """
+    Generate embeddings for the sentences in the DataFrame.
+
+    Args:
+        x (pd.Series): The DataFrame containing the sentences.
+        embedder_addr (str): Address of the embedder.
+        preprocessing_list (list[callable]): List of functions to apply to each sentence.
+    """
+    # Preprocess the text
+    sentences = x.tolist()
+
+    if preprocessing_list is None:
+        preprocessing_list = []
+
+    for preprocessor in preprocessing_list:
+        sentences = [preprocessor(s) for s in sentences]
+
+    model = SentenceTransformer(model_name_or_path=embedder_addr)
+    return model.encode(sentences)
+
+
+def tokenizer_transform_old(
+        x: pd.Series,
+        tokenizer,
+        embedder,
+        text_preprocessors=None,
+        batch_size: int = 128,
+        max_length: int = 512
+) -> np.ndarray[Any, np.dtype[Any]]:
+    """
+    Generate embeddings for the sentences in the DataFrame using a tokenizer and model.
+
+    Args:
+        x (pd.Series): The DataFrame containing the sentences.
+        batch_size (int): The batch size for preprocessing sentences.
+        max_length (int): The maximum length of the tokenized input.
+    """
+    # Preprocess the text
+    sentences = x.tolist()
+
+    if text_preprocessors is None:
+        text_preprocessors = []
+
+    for preprocessor in text_preprocessors:
+        sentences = [preprocessor(s) for s in sentences]
+
+    # Generate embeddings in batches
+    embeddings = []
+    for i in range(0, len(sentences), batch_size):
+        batch = sentences[i:i + batch_size]
+        inputs = tokenizer(
+            batch,
+            return_tensors='pt',
+            truncation=True,
+            padding=True,
+            max_length=max_length
+        )
+        outputs = embedder(**inputs)
+        batch_embeddings = outputs.last_hidden_state.mean(dim=1).detach().numpy()
+        embeddings.extend(batch_embeddings)
+
+    # Add embeddings to the DataFrame
+    return np.array(embeddings)
