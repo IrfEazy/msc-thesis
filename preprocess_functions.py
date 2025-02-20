@@ -5,8 +5,21 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Tuple, DefaultDict, Union, Optional, Iterable
 
+import emoji
+import nltk
 import numpy as np
 import pydot
+from nltk import pos_tag
+from nltk.corpus import wordnet
+from nltk.tokenize import sent_tokenize
+from nltk.tokenize import word_tokenize
+
+# Ensure necessary NLTK resources are downloaded
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('universal_tagset')
+nltk.download('stopwords')
 
 
 def extract_keys(d: Union[dict, object], path: Optional[Iterable] = None) -> list:
@@ -176,3 +189,92 @@ def add_edges(graph, parent, children):
             parent=child,
             children=sub_children
         )
+
+
+def get_wordnet_pos(treebank_tag):
+    """
+    Map Treebank POS tags to WordNet POS tags for lemmatization.
+
+    Args:
+        treebank_tag (str): Treebank POS tag.
+
+    Returns:
+        str: Corresponding WordNet POS tag.
+    """
+    if treebank_tag.startswith('J'):
+        return wordnet.ADJ
+    elif treebank_tag.startswith('V'):
+        return wordnet.VERB
+    elif treebank_tag.startswith('N'):
+        return wordnet.NOUN
+    elif treebank_tag.startswith('R'):
+        return wordnet.ADV
+    else:
+        return wordnet.NOUN  # Default to noun if no match
+
+
+def pos_tagging(text, tagset='universal'):
+    """
+    Perform Part-of-Speech (POS) tagging on the input text.
+
+    Args:
+        text (str): Input text to be tagged.
+        tagset (str): POS tagset to use. Options are 'universal' or 'default' (Penn Treebank). Default is 'universal'.
+
+    Returns:
+        list: List of tuples where each tuple contains a token and its corresponding POS tag.
+    """
+    # Tokenize the text
+    tokens = word_tokenize(text)
+
+    # Perform POS tagging
+    if tagset == 'universal':
+        # Use the Universal POS tagset for simpler and more general tags
+        pos_tags = pos_tag(tokens, tagset='universal')
+    else:
+        # Use the default Penn Treebank tagset for more detailed tags
+        pos_tags = pos_tag(tokens)
+
+    return pos_tags
+
+
+def extract_structural_features(text):
+    """
+    Extract structural features from the input text.
+
+    Args:
+        text (str): Input text to extract features from.
+
+    Returns:
+        dict: Dictionary of structural features.
+    """
+    # Tokenize the text
+    tokens = word_tokenize(text)
+    sentences = sent_tokenize(text)
+
+    # Extract features
+    features = {
+        'message_length': len(text),
+        'num_tokens': len(tokens),
+        'num_hashtags': text.count('#'),
+        'num_emails': len(re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)),
+        'num_urls': text.count('http://') + text.count('https://'),
+        'num_periods': text.count('.'),
+        'num_commas': text.count(','),
+        'num_digits': sum(c.isdigit() for c in text),
+        'num_sentences': len(sentences),
+        'num_mentioned_users': text.count('@'),
+        'num_uppercase': sum(c.isupper() for c in text),
+        'num_question_marks': text.count('?'),
+        'num_exclamation_marks': text.count('!'),
+        'num_emoticons': len(set(re.findall(r':\w+:', emoji.demojize(text)))),
+        'num_dollar_symbols': text.count('$'),
+        'num_other_symbols': len([
+            char for char in text
+            if char not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@.://,?!$' + ''.join(
+                emoji.demojize(text)
+            )
+        ])
+    }
+
+    return list(features.values())
