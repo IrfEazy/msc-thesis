@@ -1,31 +1,37 @@
+from typing import TypeVar, cast
+
 import numpy
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, hamming_loss, f1_score
 
+from preconditions import check_same_rows, check_binary_matrices
+
 
 class BRClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator=None):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression()):
         """
         Initialize the Binary Relevance classifier.
 
         Parameters:
-        base_estimator: scikit-learn binary classifier, default=LogisticRegression()
+        base_estimator: ClassifierMixin
             The base classifier to use for each binary problem.
         """
-        if base_estimator is None:
-            base_estimator = LogisticRegression()
+        self.classifiers_ = None
         self.base_classifier = base_estimator
 
-    def fit(self, X: numpy.ndarray, Y: numpy.ndarray):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def fit(self, X: ArrayLike, Y: ArrayLike) -> "BRClassifier":
         """
         Fit the Calibrated Label Ranking classifier.
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The training input samples.
-        Y : numpy.ndarray of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             Binary indicator matrix with 1 indicating that the label is relevant.
 
         Returns
@@ -34,29 +40,26 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         """
         n_labels = Y.shape[1]
         self.classifiers_ = []
+        T = TypeVar("T", bound=ClassifierMixin)
 
         for i in range(n_labels):
-            clf = clone(self.base_classifier)
-            if hasattr(clf, "fit"):
-                clf.fit(X, Y[:, i])
-            else:
-                raise Exception("Base classifier does not have a fit function")
+            clf: T = cast(T, clone(self.base_classifier))
+            clf.fit(X, Y[:, i])
             self.classifiers_.append(clf)
-
         return self
 
-    def predict(self, X: numpy.ndarray) -> numpy.ndarray:
+    def predict(self, X: ArrayLike) -> ArrayLike:
         """
         Predict labels for the given data.
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input features.
 
         Returns
         -------
-        Y_pred : numpy.ndarray of shape (n_samples, n_labels)
+        Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
         n_samples = X.shape[0]
@@ -64,25 +67,21 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         Y_pred = numpy.zeros((n_samples, n_labels))
 
         for i, clf in enumerate(self.classifiers_):
-            if hasattr(clf, "predict"):
-                Y_pred[:, i] = clf.predict(X)
-            else:
-                raise Exception("Classifiers do not have a predict function")
-
+            Y_pred[:, i] = clf.predict(X)
         return Y_pred
 
-    def predict_proba(self, X: numpy.ndarray) -> numpy.ndarray:
+    def predict_proba(self, X: ArrayLike) -> ArrayLike:
         """
         Predict label probabilities for the given data.
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input features.
 
         Returns
         -------
-        Y_proba : numpy.ndarray of shape (n_samples, n_labels)
+        Y_proba : ArrayLike of shape (n_samples, n_labels)
             The predicted probability matrix.
         """
         n_samples = X.shape[0]
@@ -90,32 +89,25 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         Y_proba = numpy.zeros((n_samples, n_labels))
 
         for i, clf in enumerate(self.classifiers_):
-            if hasattr(clf, "predict_proba"):
-                Y_proba[:, i] = clf.predict_proba(X)[:, 1]
-            else:
-                if hasattr(clf, "decision_function"):
-                    Y_proba[:, i] = clf.decision_function(X)
-                    # Apply sigmoid to convert to probabilities
-                    Y_proba[:, i] = 1 / (1 + numpy.exp(-Y_proba[:, i]))
-                else:
-                    raise Exception("Classifiers have neither predict_proba and decision_function functions")
-
+            Y_proba[:, i] = clf.predict_proba(X)[:, 1]
         return Y_proba
 
-    def evaluate(self, X: numpy.ndarray, Y: numpy.ndarray) -> dict:
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
         Evaluate the model on the given data.
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input features.
-        Y : numpy.ndarray of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             The true binary label matrix.
 
         Returns
         -------
-        metrics : dict
+        metrics : dict[str, float]
             A dictionary containing evaluation metrics.
         """
         Y_pred = self.predict(X)
