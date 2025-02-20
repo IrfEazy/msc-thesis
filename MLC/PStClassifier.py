@@ -1,32 +1,47 @@
-import numpy
 from itertools import combinations
+from typing import cast
+
+import numpy
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, hamming_loss, f1_score
-from sklearn.utils.validation import check_array, check_X_y
+from typing_extensions import TypeVar
+
+from MLC.preconditions import check_same_rows, check_binary_matrices
 
 
 class PStClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator=None, pruning_value=2, max_reintroduced=1):
+    def __init__(
+            self,
+            base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+            pruning_value: int = 2,
+            max_reintroduced: int = 1
+    ):
         """
         Initialize the Pruned Sets classifier.
 
         Parameters
         ----------
-        base_estimator : classifier object, default=LogisticRegression(max_iter=1000)
+        base_estimator : ClassifierMixin
             The multi-class classifier used on the transformed problem.
-        pruning_value : int, default=2
+        pruning_value : int
             The minimum frequency required for a label-set to be considered frequent.
-        max_reintroduced : int, default=1
+        max_reintroduced : int
             The maximal number of frequent label-sets to reintroduce per infrequent example.
         """
-        if base_estimator is None:
-            base_estimator = LogisticRegression(max_iter=1000)
+        self.class_label_matrix_ = None
+        self.classifier_ = None
+        self.class_to_label_ = None
+        self.label_to_class_ = None
+        self.n_labels_ = None
         self.base_estimator = base_estimator
         self.pruning_value = pruning_value
         self.max_reintroduced = max_reintroduced
 
-    def fit(self, X, Y):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def fit(self, X: ArrayLike, Y: ArrayLike) -> "PStClassifier":
         """
         Fit the Pruned Sets classifier.
 
@@ -39,18 +54,16 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
-        Y : array-like of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             The binary indicator matrix for labels.
 
         Returns
         -------
-        self : object
+        self : "PStClassifier"
             Fitted estimator.
         """
-        X, Y = check_X_y(X, Y, multi_output=True)
-        Y = numpy.array(Y)
         self.n_labels_ = Y.shape[1]
 
         # Convert each label vector to a tuple to serve as a dictionary key.
@@ -108,7 +121,8 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         Y_transformed = numpy.array([self.label_to_class_[lt] for lt in Y_new])
 
         # Train the multi-class classifier.
-        self.classifier_ = clone(self.base_estimator)
+        T = TypeVar("T", bound=ClassifierMixin)
+        self.classifier_: T = cast(T, clone(self.base_estimator))
         self.classifier_.fit(X_new, Y_transformed)
 
         # Precompute the label matrix for each class (used in predict_proba).
@@ -116,10 +130,9 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         self.class_label_matrix_ = numpy.zeros((n_classes, self.n_labels_), dtype=int)
         for class_idx, label_arr in self.class_to_label_.items():
             self.class_label_matrix_[class_idx, :] = label_arr
-
         return self
 
-    def predict(self, X):
+    def predict(self, X: ArrayLike) -> ArrayLike:
         """
         Predict multi-label outputs for the given data.
 
@@ -128,20 +141,19 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
 
         Returns
         -------
-        Y_pred : ndarray of shape (n_samples, n_labels)
+        Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
-        X = check_array(X)
         Y_class_pred = self.classifier_.predict(X)
         Y_pred = numpy.array([self.class_to_label_[cls] for cls in Y_class_pred])
         return Y_pred
 
-    def predict_proba(self, X):
+    def predict_proba(self, X: ArrayLike) -> ArrayLike:
         """
         Predict marginal probabilities for each label.
 
@@ -151,20 +163,21 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
 
         Returns
         -------
-        Y_proba : ndarray of shape (n_samples, n_labels)
+        Y_proba : ArrayLike of shape (n_samples, n_labels)
             The estimated probabilities for each label.
         """
-        X = check_array(X)
         proba = self.classifier_.predict_proba(X)  # shape: (n_samples, n_classes)
         Y_proba = numpy.dot(proba, self.class_label_matrix_)
         return Y_proba
 
-    def evaluate(self, X, Y_true):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def evaluate(self, X: ArrayLike, Y_true: ArrayLike) -> dict[str, float]:
         """
         Evaluate the Pruned Sets classifier using standard multi-label metrics.
 
@@ -175,17 +188,16 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
-        Y_true : array-like of shape (n_samples, n_labels)
+        Y_true : ArrayLike of shape (n_samples, n_labels)
             The true binary label matrix.
 
         Returns
         -------
-        metrics : dict
+        metrics : dict[str, float]
             A dictionary containing accuracy, hamming loss, and micro F1 score.
         """
-        Y_true = numpy.array(Y_true)
         Y_pred = self.predict(X)
         accuracy = accuracy_score(Y_true, Y_pred)
         hamming = hamming_loss(Y_true, Y_pred)
