@@ -1,35 +1,49 @@
+from typing import Optional, cast
+
 import numpy
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
-from sklearn.utils import check_X_y, check_array
 from tqdm.notebook import tqdm
+from typing_extensions import TypeVar
+
+from MLC.preconditions import check_same_rows, check_binary_matrices
 
 
 class CDNClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator=None, n_iterations=100, burn_in=50, random_state=None):
+    def __init__(
+            self,
+            base_estimator: ClassifierMixin = LogisticRegression(),
+            n_iterations: int = 100,
+            burn_in: int = 50,
+            random_state: Optional[int] = None
+    ):
         """
         Initialize the Conditional Dependency Network classifier.
 
         Parameters
         ----------
-        base_estimator : scikit-learn binary classifier, default=LogisticRegression()
+        base_estimator : ClassifierMixin
             The estimator used to model the conditional probability for each label.
-        n_iterations : int, default=100
+        n_iterations : int
             Total number of Gibbs sampling iterations during inference.
-        burn_in : int, default=50
+        burn_in : int
             Number of initial iterations to discard for burn-in.
-        random_state : int or None, default=None
+        random_state : Optional[None]
             Seed for random number generation.
         """
-        if base_estimator is None:
-            base_estimator = LogisticRegression()
+        self.classifiers_ = None
+        self.n_features_ = None
+        self.n_labels_ = None
         self.base_estimator = base_estimator
         self.n_iterations = n_iterations
         self.burn_in = burn_in
         self.random_state = random_state
 
-    def fit(self, X: numpy.ndarray, Y: numpy.ndarray):
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def fit(self, X: ArrayLike, Y: ArrayLike) -> "CDNClassifier":
         """
         Fit the CDN classifier.
 
@@ -38,18 +52,17 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Training input samples.
-        Y : numpy.ndarray of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             Binary indicator matrix of labels.
 
         Returns
         -------
-        self : object
+        self : "CDNClassifier"
             Fitted estimator.
         """
         # Validate inputs
-        X, Y = check_X_y(X, Y, multi_output=True)
         Y = numpy.array(Y)
         n_samples, n_labels = Y.shape
         self.n_labels_ = n_labels
@@ -57,22 +70,19 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
 
         # Dictionary to store a classifier for each label
         self.classifiers_ = {}
+        T = TypeVar("T", bound=ClassifierMixin)
 
         # Train a binary classifier for each label j
         for j in tqdm(range(n_labels), desc="Training for each label"):
             # Construct augmented features: [X, Y_without_label_j]
             other_labels = numpy.delete(Y, j, axis=1)
             X_aug = numpy.hstack((X, other_labels))
-            clf = clone(self.base_estimator)
-            if hasattr(clf, "fit"):
-                clf.fit(X_aug, Y[:, j])
-            else:
-                raise Exception("Base estimator does not have fit function")
+            clf: T = cast(T, clone(self.base_estimator))
+            clf.fit(X_aug, Y[:, j])
             self.classifiers_[j] = clf
-
         return self
 
-    def _gibbs_sampling(self, X_instance: numpy.ndarray) -> numpy.ndarray:
+    def _gibbs_sampling(self, X_instance: ArrayLike) -> ArrayLike:
         """
         Perform Gibbs sampling for a single instance.
 
@@ -82,12 +92,12 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X_instance : numpy.ndarray of shape (n_features,)
+        X_instance : ArrayLike of shape (n_features,)
             The feature vector for one instance.
 
         Returns
         -------
-        prob_estimates : numpy.ndarray of shape (n_labels,)
+        prob_estimates : ArrayLike of shape (n_labels,)
             Estimated probability for each label.
         """
         rng = numpy.random.RandomState(self.random_state)
@@ -105,10 +115,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
                 other_labels = numpy.delete(current_state, j)
                 X_aug = numpy.hstack((X_instance, other_labels)).reshape(1, -1)
                 # Obtain probability that label j is 1
-                if hasattr(self.classifiers_[j], "predict_proba"):
-                    p_j = self.classifiers_[j].predict_proba(X_aug)[0, 1]
-                else:
-                    raise Exception("j-th classifier does not have predict_proba function")
+                p_j = self.classifiers_[j].predict_proba(X_aug)[0, 1]
                 # Sample new value for label j from a Bernoulli distribution
                 current_state[j] = 1 if rng.rand() < p_j else 0
             # After burn-in, accumulate the sample
@@ -120,7 +127,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         prob_estimates = sample_sum / count if count > 0 else current_state
         return prob_estimates
 
-    def predict_proba(self, X: numpy.ndarray) -> numpy.ndarray:
+    def predict_proba(self, X: ArrayLike) -> ArrayLike:
         """
         Predict probability estimates for each label using Gibbs sampling.
 
@@ -129,26 +136,22 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
 
         Returns
         -------
-        proba : numpy.ndarray of shape (n_samples, n_labels)
+        proba : ArrayLike of shape (n_samples, n_labels)
             Estimated probabilities for each label.
         """
-        X = check_array(X)
-        if hasattr(X, "shape"):
-            n_samples = X.shape[0]
-        else:
-            raise Exception("Input samples do not have shape function")
+        n_samples = X.shape[0]
         proba = numpy.zeros((n_samples, self.n_labels_))
 
-        for i in range(n_samples):
+        for i in tqdm(range(n_samples), desc="Predicting for each classifier"):
             proba[i, :] = self._gibbs_sampling(X[i])
         return proba
 
-    def predict(self, X: numpy.ndarray, threshold: float = 0.5) -> numpy.ndarray:
+    def predict(self, X: ArrayLike, threshold: float = 0.5) -> ArrayLike:
         """
         Predict the multi-label outputs for each instance.
 
@@ -156,19 +159,23 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
+        threshold : float
+            Thresholding probability.
 
         Returns
         -------
-        predictions : numpy.ndarray of shape (n_samples, n_labels)
+        predictions : ArrayLike of shape (n_samples, n_labels)
             Binary predictions for each label.
         """
         proba = self.predict_proba(X)
         predictions = (proba > threshold).astype(int)
         return predictions
 
-    def evaluate(self, X: numpy.ndarray, Y_true: numpy.ndarray, threshold: float = 0.5) -> dict:
+    @check_same_rows("X", "Y")
+    @check_binary_matrices("Y")
+    def evaluate(self, X: ArrayLike, Y_true: ArrayLike, threshold: float = 0.5) -> dict[str, float]:
         """
         Evaluate the classifier using standard multi-label metrics.
 
@@ -179,17 +186,17 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
+        X : ArrayLike of shape (n_samples, n_features)
             Input samples.
-        Y_true : numpy.ndarray of shape (n_samples, n_labels)
+        Y_true : ArrayLike of shape (n_samples, n_labels)
             True binary indicator matrix of labels.
+        threshold
 
         Returns
         -------
-        metrics : dict
+        metrics : dict[str, float]
             Dictionary containing accuracy, micro F1 score, and hamming loss.
         """
-        Y_true = numpy.array(Y_true)
         Y_pred = self.predict(X, threshold)
         acc = accuracy_score(Y_true, Y_pred)
         f1 = f1_score(Y_true, Y_pred, average="micro")
