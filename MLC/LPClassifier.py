@@ -4,16 +4,17 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, hamming_loss, f1_score
 from sklearn.utils.validation import check_X_y
-from tqdm.notebook import tqdm
 from typing_extensions import TypeVar
 
-from MLC.preconditions import check_same_rows, check_binary_matrices
+from .functions import assess
+from .preconditions import check_same_rows, check_binary_matrices
 
 
 class LPClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000)):
+    def __init__(
+        self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000)
+    ):
         """
         Initialize the Label Powerset classifier.
 
@@ -58,8 +59,13 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         label_tuples = [tuple(row) for row in Y]
         # Create a mapping: unique label-set tuple -> unique class index.
         unique_label_tuples = list(set(label_tuples))
-        self.label_to_class_ = {label_tuple: idx for idx, label_tuple in enumerate(unique_label_tuples)}
-        self.class_to_label_ = {idx: numpy.array(label_tuple) for label_tuple, idx in self.label_to_class_.items()}
+        self.label_to_class_ = {
+            label_tuple: idx for idx, label_tuple in enumerate(unique_label_tuples)
+        }
+        self.class_to_label_ = {
+            idx: numpy.array(label_tuple)
+            for label_tuple, idx in self.label_to_class_.items()
+        }
 
         # Transform multi-label targets into a single multi-class target.
         Y_transformed = numpy.array([self.label_to_class_[tuple(row)] for row in Y])
@@ -72,7 +78,7 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         # Precompute a matrix of label sets for each class.
         n_classes = len(self.class_to_label_)
         self.class_label_matrix_ = numpy.zeros((n_classes, self.n_labels_), dtype=int)
-        for class_idx, label_arr in tqdm(self.class_to_label_.items(), desc="Training for each classifier"):
+        for class_idx, label_arr in self.class_to_label_.items():
             self.class_label_matrix_[class_idx, :] = label_arr
         return self
 
@@ -123,7 +129,7 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
-    def evaluate(self, X: ArrayLike, Y_true: ArrayLike) -> dict[str, float]:
+    def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
         Evaluate the Label Powerset classifier using standard multi-label metrics.
 
@@ -136,7 +142,7 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         ----------
         X : ArrayLike of shape (n_samples, n_features)
             The input samples.
-        Y_true : ArrayLike of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             The true binary indicator matrix for labels.
 
         Returns
@@ -144,8 +150,4 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         metrics : dict[str, float]
             A dictionary containing accuracy, hamming loss, and micro F1 score.
         """
-        Y_pred = self.predict(X)
-        accuracy = accuracy_score(Y_true, Y_pred)
-        hamming = hamming_loss(Y_true, Y_pred)
-        f1 = f1_score(Y_true, Y_pred, average='micro')
-        return {"accuracy": accuracy, "hamming_loss": hamming, "f1_micro": f1}
+        return assess(Y, self.predict(X))
