@@ -368,12 +368,11 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,windows,jetbrains+all,pycharm+all,python,jupyternotebooks
 
-/data/2023 TWITTER REDDIT/
-
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode
 
 ### VisualStudioCode ###
+.vscode/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -393,3 +392,8 @@ $RECYCLE.BIN/
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode
+
+/data/2023 TWITTER REDDIT/
+/data/tweets-dataset/
+/data/tweets-dataset-for-cyberattack-detection/
+/embedders/
