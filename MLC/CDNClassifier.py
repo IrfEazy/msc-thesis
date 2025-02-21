@@ -4,20 +4,19 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, hamming_loss
-from tqdm.notebook import tqdm
 from typing_extensions import TypeVar
 
-from MLC.preconditions import check_same_rows, check_binary_matrices
+from .functions import assess
+from .preconditions import check_same_rows, check_binary_matrices
 
 
 class CDNClassifier(BaseEstimator, ClassifierMixin):
     def __init__(
-            self,
-            base_estimator: ClassifierMixin = LogisticRegression(),
-            n_iterations: int = 100,
-            burn_in: int = 50,
-            random_state: Optional[int] = None
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(),
+        n_iterations: int = 100,
+        burn_in: int = 50,
+        random_state: Optional[int] = None,
     ):
         """
         Initialize the Conditional Dependency Network classifier.
@@ -48,7 +47,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         Fit the CDN classifier.
 
         For each label, a binary classifier is trained to predict that label using
-        the original features augmented by all other labels (i.e., the label’s Markov blanket).
+        the original features augmented by all other labels (i.e., the label's Markov blanket).
 
         Parameters
         ----------
@@ -73,7 +72,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         T = TypeVar("T", bound=ClassifierMixin)
 
         # Train a binary classifier for each label j
-        for j in tqdm(range(n_labels), desc="Training for each label"):
+        for j in range(n_labels):
             # Construct augmented features: [X, Y_without_label_j]
             other_labels = numpy.delete(Y, j, axis=1)
             X_aug = numpy.hstack((X, other_labels))
@@ -147,7 +146,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         n_samples = X.shape[0]
         proba = numpy.zeros((n_samples, self.n_labels_))
 
-        for i in tqdm(range(n_samples), desc="Predicting for each classifier"):
+        for i in range(n_samples):
             proba[i, :] = self._gibbs_sampling(X[i])
         return proba
 
@@ -162,7 +161,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         X : ArrayLike of shape (n_samples, n_features)
             Input samples.
         threshold : float
-            Thresholding probability.
+            Threshold probability.
 
         Returns
         -------
@@ -175,7 +174,9 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
-    def evaluate(self, X: ArrayLike, Y_true: ArrayLike, threshold: float = 0.5) -> dict[str, float]:
+    def evaluate(
+        self, X: ArrayLike, Y: ArrayLike, threshold: float = 0.5
+    ) -> dict[str, float]:
         """
         Evaluate the classifier using standard multi-label metrics.
 
@@ -188,17 +189,14 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         ----------
         X : ArrayLike of shape (n_samples, n_features)
             Input samples.
-        Y_true : ArrayLike of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             True binary indicator matrix of labels.
-        threshold
+        threshold : float
+            Threshold probability.
 
         Returns
         -------
         metrics : dict[str, float]
             Dictionary containing accuracy, micro F1 score, and hamming loss.
         """
-        Y_pred = self.predict(X, threshold)
-        acc = accuracy_score(Y_true, Y_pred)
-        f1 = f1_score(Y_true, Y_pred, average="micro")
-        hamming = hamming_loss(Y_true, Y_pred)
-        return {"accuracy": acc, "f1_micro": f1, "hamming_loss": hamming}
+        return assess(Y, self.predict(X, threshold))
