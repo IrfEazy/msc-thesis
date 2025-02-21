@@ -4,9 +4,8 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, hamming_loss, f1_score
-from tqdm.notebook import tqdm
 
+from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
@@ -20,7 +19,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
             The base classifier to use for each binary problem.
         """
         self.classifiers_ = None
-        self.base_classifier = base_estimator
+        self.base_estimator = base_estimator
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -43,8 +42,8 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         self.classifiers_ = []
         T = TypeVar("T", bound=ClassifierMixin)
 
-        for i in tqdm(range(n_labels), desc="Training for each label"):
-            clf: T = cast(T, clone(self.base_classifier))
+        for i in range(n_labels):
+            clf: T = cast(T, clone(self.base_estimator))
             clf.fit(X, Y[:, i])
             self.classifiers_.append(clf)
         return self
@@ -68,7 +67,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         Y_pred = numpy.zeros((n_samples, n_labels))
         T = TypeVar("T", bound=ClassifierMixin)
 
-        for i, clf in enumerate(tqdm(self.classifiers_, desc="Predicting for each classifier")):
+        for i, clf in enumerate(self.classifiers_):
             clf: T = cast(T, clf)
             Y_pred[:, i] = clf.predict(X)
         return Y_pred
@@ -92,7 +91,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         Y_proba = numpy.zeros((n_samples, n_labels))
         T = TypeVar("T", bound=ClassifierMixin)
 
-        for i, clf in enumerate(tqdm(self.classifiers_, desc="Predicting for each classifier")):
+        for i, clf in enumerate(self.classifiers_):
             clf: T = cast(T, clf)
             Y_proba[:, i] = clf.predict_proba(X)[:, 1]
         return Y_proba
@@ -115,8 +114,4 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         metrics : dict[str, float]
             Dictionary containing accuracy, micro F1 score, and hamming loss.
         """
-        Y_pred = self.predict(X)
-        accuracy = accuracy_score(Y, Y_pred)
-        f1 = f1_score(Y, Y_pred, average="micro")
-        hamming = hamming_loss(Y, Y_pred)
-        return {"accuracy": accuracy, "f1_micro": f1, "hamming_loss": hamming}
+        return assess(Y, self.predict(X))
