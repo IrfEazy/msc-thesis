@@ -4,15 +4,16 @@ import numpy
 from numpy._typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, hamming_loss, f1_score
-from tqdm.notebook import tqdm
 from typing_extensions import TypeVar
 
-from MLC.preconditions import check_same_rows, check_binary_matrices
+from .functions import assess
+from .preconditions import check_same_rows, check_binary_matrices
 
 
 class CCClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(), order=None):
+    def __init__(
+        self, base_estimator: ClassifierMixin = LogisticRegression(), order=None
+    ):
         """
         Initialize the Classifier Chain.
 
@@ -41,7 +42,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y : ArrayLike
             Label matrix of shape (n_samples, n_labels).
         """
-        n_samples, n_labels = Y.shape
+        _, n_labels = Y.shape
         self.order_ = self.order if self.order is not None else range(n_labels)
         X_extended = numpy.copy(X)
         T = TypeVar("T", bound=ClassifierMixin)
@@ -74,7 +75,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y_pred = numpy.zeros((n_samples, len(self.chain)))
         T = TypeVar("T", bound=ClassifierMixin)
 
-        for i, clf in enumerate(tqdm(self.chain, desc="Predicting for each classifier")):
+        for i, clf in enumerate(self.chain):
             clf: T = cast(T, clf)
             Y_pred[:, i] = clf.predict(X_extended)
             X_extended = numpy.hstack((X_extended, Y_pred[:, i].reshape(-1, 1)))
@@ -100,7 +101,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y_proba = numpy.zeros((n_samples, len(self.chain)))
         T = TypeVar("T", bound=ClassifierMixin)
 
-        for i, clf in enumerate(tqdm(self.chain, desc="Predicting for each classifier")):
+        for i, clf in enumerate(self.chain):
             clf: T = cast(T, clf)
             Y_proba[:, i] = clf.predict_proba(X_extended)[:, 1]
             X_extended = numpy.hstack((X_extended, Y_proba[:, i].reshape(-1, 1)))
@@ -108,7 +109,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
-    def evaluate(self, X: ArrayLike, Y_true: ArrayLike) -> dict[str, float]:
+    def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
         Evaluate the classifier chain on the given test data.
 
@@ -116,7 +117,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         ----------
         X : ArrayLike
             Feature matrix of shape (n_samples, n_features).
-        Y_true : ArrayLike
+        Y : ArrayLike
             True label matrix of shape (n_samples, n_labels).
 
         Returns
@@ -124,8 +125,4 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         metrics : dict[str, float]
             Dictionary containing evaluation metrics.
         """
-        Y_pred = self.predict(X)
-        accuracy = accuracy_score(Y_true, Y_pred)
-        f1 = f1_score(Y_true, Y_pred, average="micro")
-        hamming = hamming_loss(Y_true, Y_pred)
-        return {"accuracy": accuracy, "f1_micro": f1, "hamming_loss": hamming}
+        return assess(Y, self.predict(X))
