@@ -5,36 +5,37 @@ from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, hamming_loss, f1_score
 from sklearn.multioutput import MultiOutputClassifier
-from tqdm.notebook import tqdm
 from typing_extensions import TypeVar
 
-from MLC.preconditions import check_same_rows, check_binary_matrices
+from .preconditions import check_same_rows, check_binary_matrices
+from .functions import assess
 
 
 # Helper Node class to represent a node in the hierarchy.
 class Node:
     def __init__(self, labels: List[int]):
         """
+        Initialize a node in the hierarchy.
+
         Parameters
         ----------
         labels : List[int]
-            The indices (with respect to the global label space) that are assigned to this node.
+            The indices of the labels represented by this node.
         """
-        self.labels = labels  # list of label indices in this node
-        self.clf = None  # classifier trained on samples for these labels
-        self.children = []  # child nodes (if any)
-        self.is_leaf = False  # True if this node contains a single label
+        self.labels = labels
+        self.clf = None
+        self.children = []
+        self.is_leaf = False
 
 
 class HOMERClassifier(BaseEstimator, ClassifierMixin):
     def __init__(
-            self,
-            base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-            n_clusters: int = 2,
-            threshold: float = 0.5,
-            random_state: Optional[int] = None
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        n_clusters: int = 2,
+        threshold: float = 0.5,
+        random_state: Optional[int] = None,
     ):
         """
         Initialize the HOMER classifier.
@@ -42,13 +43,13 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         Parameters
         ----------
         base_estimator : ClassifierMixin
-            The base learner to be used at each node.
+            The base classifier to use at each node.
         n_clusters : int
-            The number of children to split into at each internal node.
+            The maximum number of clusters to use for label set splitting.
         threshold : float
-            Decision threshold for determining label relevance.
+            The probability threshold for a label to be considered relevant.
         random_state : Optional[int]
-            Seed for random number generation.
+            The random seed to use for reproducibility.
         """
         self.root = None
         self.n_labels_ = None
@@ -70,12 +71,12 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         X : ArrayLike of shape (n_samples, n_features)
             Input feature matrix.
         Y : ArrayLike of shape (n_samples, n_labels)
-            Binary indicator matrix for labels.
+            Binary label matrix.
 
         Returns
         -------
         self : "HOMERClassifier"
-            Fitted HOMER classifier.
+            The fitted HOMER classifier.
         """
         self.Y_ = numpy.array(Y)
         self.X_ = X
@@ -93,16 +94,16 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         Parameters
         ----------
         X : ArrayLike
-            Training features.
+            Input feature matrix.
         Y : ArrayLike
-            Training labels.
+            Binary label matrix.
         label_indices : List[int]
-            The indices of the labels (from the global label space) to be handled at this node.
+            The indices of the labels to consider for this node.
 
         Returns
         -------
         node : Node
-            The constructed node (with classifier and child nodes, if any).
+            The node representing the current label set.
         """
         node = Node(label_indices)
         # Select samples having at least one positive label among those in this node.
@@ -140,11 +141,13 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         else:
             # Represent each label by its column vector (over all training samples)
             # and cluster them into n_clusters groups.
-            label_matrix = Y[:, label_indices].T  # shape: (n_labels_node, n_samples)
+            label_matrix = Y[:, label_indices].T
             kmeans = KMeans(n_clusters=n_clusters, random_state=self.random_state)
             clusters = kmeans.fit_predict(label_matrix)
             for cl in numpy.unique(clusters):
-                child_labels = [label_indices[i] for i in range(n_labels_node) if clusters[i] == cl]
+                child_labels = [
+                    label_indices[i] for i in range(n_labels_node) if clusters[i] == cl
+                ]
                 child = self._build_tree(X, Y, child_labels)
                 node.children.append(child)
         node.is_leaf = False
@@ -157,14 +160,14 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         Parameters
         ----------
         x : ArrayLike of shape (n_features,)
-            A single input instance.
+            The input feature vector.
         node : Node
             The current node in the hierarchy.
 
         Returns
         -------
         prob : ArrayLike of shape (n_labels,)
-            A vector of predicted probabilities (in the global label space) for instance x.
+            Predicted probabilities for each label in the global label space.
         """
         prob = numpy.zeros(self.n_labels_)
 
@@ -177,9 +180,9 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
                 prob[node.labels[0]] = p
             else:
                 # For a multi-label node, node.clf is a MultiOutputClassifier.
-                proba_list = node.clf.predict_proba(x_reshaped)
+                probabilities_list = node.clf.predict_proba(x_reshaped)
                 for i, lbl in enumerate(node.labels):
-                    p = proba_list[i][0][1]
+                    p = probabilities_list[i][0][1]
                     prob[lbl] = p
 
         # Traverse children if available.
@@ -203,14 +206,14 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
 
         Returns
         -------
-        Y_proba : ArrayLike of shape (n_samples, n_labels)
-            Predicted probability estimates for each label.
+        probabilities : ArrayLike of shape (n_samples, n_labels)
+            Predicted probabilities for each label in the global label space.
         """
         n_samples = X.shape[0]
-        Y_proba = numpy.zeros((n_samples, self.n_labels_))
-        for i in tqdm(range(n_samples), desc="Predicting for each sample"):
-            Y_proba[i] = self._traverse_predict(X[i], self.root)
-        return Y_proba
+        probabilities = numpy.zeros((n_samples, self.n_labels_))
+        for i in range(n_samples):
+            probabilities[i] = self._traverse_predict(X[i], self.root)
+        return probabilities
 
     def predict(self, X: ArrayLike) -> ArrayLike:
         """
@@ -226,14 +229,14 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         Returns
         -------
         Y_pred : ArrayLike of shape (n_samples, n_labels)
-            The binary label matrix.
+            Predicted binary labels for each instance.
         """
-        proba = self.predict_proba(X)
-        return (proba >= self.threshold).astype(int)
+        probabilities = self.predict_proba(X)
+        return (probabilities >= self.threshold).astype(int)
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
-    def evaluate(self, X: ArrayLike, Y_true: ArrayLike) -> dict[str, float]:
+    def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
         Evaluate the HOMER classifier using common multi-label metrics.
 
@@ -246,16 +249,13 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         ----------
         X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
-        Y_true : ArrayLike of shape (n_samples, n_labels)
-            The true binary label matrix.
+        Y : ArrayLike of shape (n_samples, n_labels)
+            The binary label matrix.
 
         Returns
         -------
         metrics : dict[str, float]
-            A dictionary with keys 'accuracy', 'hamming_loss', and 'f1_micro'.
+            A dictionary containing the computed evaluation
+            metrics (accuracy, hamming loss, and F1 score).
         """
-        Y_pred = self.predict(X)
-        acc = accuracy_score(Y_true, Y_pred)
-        hamming = hamming_loss(Y_true, Y_pred)
-        f1 = f1_score(Y_true, Y_pred, average='micro')
-        return {"accuracy": acc, "hamming_loss": hamming, "f1_micro": f1}
+        return assess(Y, self.predict(X))
