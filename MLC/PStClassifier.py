@@ -5,18 +5,18 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, hamming_loss, f1_score
 from typing_extensions import TypeVar
 
-from MLC.preconditions import check_same_rows, check_binary_matrices
+from .functions import assess
+from .preconditions import check_same_rows, check_binary_matrices
 
 
 class PStClassifier(BaseEstimator, ClassifierMixin):
     def __init__(
-            self,
-            base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-            pruning_value: int = 2,
-            max_reintroduced: int = 1
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        pruning_value: int = 2,
+        max_reintroduced: int = 1,
     ):
         """
         Initialize the Pruned Sets classifier.
@@ -75,7 +75,9 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
             freq_dict[lt] = freq_dict.get(lt, 0) + 1
 
         # Identify frequent label-sets.
-        frequent_label_sets = {lt for lt, count in freq_dict.items() if count >= self.pruning_value}
+        frequent_label_sets = {
+            lt for lt, count in freq_dict.items() if count >= self.pruning_value
+        }
 
         # Build new training data: (X_new, Y_new)
         X_new = []
@@ -99,7 +101,9 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
                             candidate[j] = 1
                         candidate_subsets.add(tuple(candidate))
                 # Retain only those candidate subsets that are frequent.
-                frequent_candidates = [cand for cand in candidate_subsets if cand in frequent_label_sets]
+                frequent_candidates = [
+                    cand for cand in candidate_subsets if cand in frequent_label_sets
+                ]
                 # Reintroduce up to max_reintroduced examples from these candidates.
                 count = 0
                 for cand in frequent_candidates:
@@ -115,7 +119,9 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         # Map each unique label-set in Y_new to a unique class index.
         unique_label_sets = list(set(Y_new))
         self.label_to_class_ = {lt: idx for idx, lt in enumerate(unique_label_sets)}
-        self.class_to_label_ = {idx: numpy.array(lt) for lt, idx in self.label_to_class_.items()}
+        self.class_to_label_ = {
+            idx: numpy.array(lt) for lt, idx in self.label_to_class_.items()
+        }
 
         # Transform multi-label targets into multi-class targets.
         Y_transformed = numpy.array([self.label_to_class_[lt] for lt in Y_new])
@@ -177,7 +183,7 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
-    def evaluate(self, X: ArrayLike, Y_true: ArrayLike) -> dict[str, float]:
+    def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
         Evaluate the Pruned Sets classifier using standard multi-label metrics.
 
@@ -190,7 +196,7 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         ----------
         X : ArrayLike of shape (n_samples, n_features)
             The input feature matrix.
-        Y_true : ArrayLike of shape (n_samples, n_labels)
+        Y : ArrayLike of shape (n_samples, n_labels)
             The true binary label matrix.
 
         Returns
@@ -198,8 +204,4 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         metrics : dict[str, float]
             A dictionary containing accuracy, hamming loss, and micro F1 score.
         """
-        Y_pred = self.predict(X)
-        accuracy = accuracy_score(Y_true, Y_pred)
-        hamming = hamming_loss(Y_true, Y_pred)
-        f1 = f1_score(Y_true, Y_pred, average='micro')
-        return {"accuracy": accuracy, "hamming_loss": hamming, "f1_micro": f1}
+        return assess(Y, self.predict(X))
