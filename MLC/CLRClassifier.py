@@ -4,11 +4,10 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, hamming_loss
-from tqdm.notebook import tqdm
 from typing_extensions import TypeVar
 
-from MLC.preconditions import check_same_rows, check_binary_matrices
+from .functions import assess
+from .preconditions import check_same_rows, check_binary_matrices
 
 
 class CLRClassifier(BaseEstimator, ClassifierMixin):
@@ -51,7 +50,7 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         T = TypeVar("T", bound=ClassifierMixin)
 
         # Train pairwise classifiers for each pair (j, k), j < k
-        for j in tqdm(range(self.q_), desc="Training for each pairwise classifier"):
+        for j in range(self.q_):
             for k in range(j + 1, self.q_):
                 X_pair = []
                 y_pair = []
@@ -69,7 +68,7 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
                     self.pairwise_classifiers_[(j, k)] = clf
 
         # Train auxiliary classifiers (for each label vs. the virtual label)
-        for j in tqdm(range(self.q_), desc="Training for each auxiliary classifier"):
+        for j in range(self.q_):
             clf_aux: T = cast(T, clone(self.base_estimator))
             clf_aux.fit(X, Y[:, j])
             self.aux_classifiers_[j] = clf_aux
@@ -97,7 +96,7 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         votes = numpy.zeros((n_samples, self.q_))
 
         # Aggregate votes from pairwise classifiers
-        for (j, k), clf in tqdm(self.pairwise_classifiers_.items(), desc="Predicting for each pairwise classifier"):
+        for (j, k), clf in self.pairwise_classifiers_.items():
             predictions = clf.predict(X)
             # For each sample, if prediction is 1 then label j wins; otherwise label k wins.
             for i, pred in enumerate(predictions):
@@ -111,7 +110,7 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
 
         # Obtain auxiliary probabilities for each label
         aux_probs = numpy.zeros((n_samples, self.q_))
-        for j, clf in tqdm(self.aux_classifiers_.items(), desc="Predicting for each auxiliary classifier"):
+        for j, clf in self.aux_classifiers_.items():
             # Assuming the estimator has a predict_proba method;
             # otherwise one might use decision_function and calibrate it.
             aux_probs[:, j] = clf.predict_proba(X)[:, 1]
@@ -163,8 +162,4 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         metrics : dict[str, float]
             Dictionary containing accuracy, micro F1 score, and hamming loss.
         """
-        Y_pred = self.predict(X)
-        acc = accuracy_score(Y, Y_pred)
-        f1 = f1_score(Y, Y_pred, average="micro")
-        hamming = hamming_loss(Y, Y_pred)
-        return {"accuracy": acc, "f1_micro": f1, "hamming_loss": hamming}
+        return assess(Y, self.predict(X))
