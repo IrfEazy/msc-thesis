@@ -1,9 +1,10 @@
-from typing import cast
+from typing import cast, Optional
 
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
 from .functions import assess
@@ -11,11 +12,8 @@ from .preconditions import check_same_rows, check_binary_matrices
 
 
 class MBRClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self,
-        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-        meta_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-    ):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+                 meta_estimator: ClassifierMixin = LogisticRegression(max_iter=1000)):
         """
         Parameters
         ----------
@@ -29,6 +27,7 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         self.n_labels_ = None
         self.base_estimator = base_estimator
         self.meta_estimator = meta_estimator
+        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -52,6 +51,7 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         self : "MBRClassifier"
             Returns self.
         """
+        X = self.scaler_.fit_transform(X)
         Y = numpy.array(Y)
         n_samples, n_labels = Y.shape
         self.n_labels_ = n_labels
@@ -106,6 +106,7 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         probabilities : ArrayLike of shape (n_samples, n_labels)
             Probability estimates for each label.
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
 
         # First-stage predictions on new data.
