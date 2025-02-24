@@ -4,6 +4,7 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
 from .functions import assess
@@ -11,13 +12,8 @@ from .preconditions import check_same_rows, check_binary_matrices
 
 
 class CDNClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self,
-        base_estimator: ClassifierMixin = LogisticRegression(),
-        n_iterations: int = 100,
-        burn_in: int = 50,
-        random_state: Optional[int] = None,
-    ):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(), n_iterations: int = 100,
+                 burn_in: int = 50, random_state: Optional[int] = None):
         """
         Initialize the Conditional Dependency Network classifier.
 
@@ -39,6 +35,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         self.n_iterations = n_iterations
         self.burn_in = burn_in
         self.random_state = random_state
+        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -61,6 +58,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         self : "CDNClassifier"
             Fitted estimator.
         """
+        X = self.scaler_.fit_transform(X)
         # Validate inputs
         Y = numpy.array(Y)
         n_samples, n_labels = Y.shape
@@ -143,6 +141,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         proba : ArrayLike of shape (n_samples, n_labels)
             Estimated probabilities for each label.
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         proba = numpy.zeros((n_samples, self.n_labels_))
 
