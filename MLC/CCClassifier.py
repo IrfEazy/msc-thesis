@@ -1,9 +1,10 @@
-from typing import cast
+from typing import cast, Optional
 
 import numpy
 from numpy._typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
 from .functions import assess
@@ -11,9 +12,7 @@ from .preconditions import check_same_rows, check_binary_matrices
 
 
 class CCClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self, base_estimator: ClassifierMixin = LogisticRegression(), order=None
-    ):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(), order=None):
         """
         Initialize the Classifier Chain.
 
@@ -28,6 +27,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         self.base_estimator = base_estimator
         self.order = order
         self.chain = []
+        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -42,6 +42,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y : ArrayLike
             Label matrix of shape (n_samples, n_labels).
         """
+        X = self.scaler_.fit_transform(X)
         _, n_labels = Y.shape
         self.order_ = self.order if self.order is not None else range(n_labels)
         X_extended = numpy.copy(X)
@@ -70,6 +71,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y_pred: ArrayLike
             Predicted label matrix of shape (n_samples, n_labels).
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         X_extended = numpy.copy(X)
         Y_pred = numpy.zeros((n_samples, len(self.chain)))
@@ -96,6 +98,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y_proba : ArrayLike
             Predicted label probability matrix of shape (n_samples, n_labels).
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         X_extended = numpy.copy(X)
         Y_proba = numpy.zeros((n_samples, len(self.chain)))
