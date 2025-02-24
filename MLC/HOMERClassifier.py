@@ -6,10 +6,11 @@ from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
-from .preconditions import check_same_rows, check_binary_matrices
 from .functions import assess
+from .preconditions import check_same_rows, check_binary_matrices
 
 
 # Helper Node class to represent a node in the hierarchy.
@@ -30,13 +31,8 @@ class Node:
 
 
 class HOMERClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self,
-        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-        n_clusters: int = 2,
-        threshold: float = 0.5,
-        random_state: Optional[int] = None,
-    ):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000), n_clusters: int = 2,
+                 threshold: float = 0.5, random_state: Optional[int] = None):
         """
         Initialize the HOMER classifier.
 
@@ -59,6 +55,7 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         self.n_clusters = n_clusters
         self.threshold = threshold
         self.random_state = random_state
+        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -78,6 +75,7 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         self : "HOMERClassifier"
             The fitted HOMER classifier.
         """
+        X = self.scaler_.fit_transform(X)
         self.Y_ = numpy.array(Y)
         self.X_ = X
         self.n_labels_ = self.Y_.shape[1]
@@ -209,6 +207,7 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         probabilities : ArrayLike of shape (n_samples, n_labels)
             Predicted probabilities for each label in the global label space.
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         probabilities = numpy.zeros((n_samples, self.n_labels_))
         for i in range(n_samples):
