@@ -4,6 +4,7 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
 from .functions import assess
@@ -11,13 +12,8 @@ from .preconditions import check_same_rows, check_binary_matrices
 
 
 class RAkELClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self,
-        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-        k: int = 3,
-        n_estimators: Optional[int] = None,
-        random_state: Optional[int] = None,
-    ):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000), k: int = 3,
+                 n_estimators: Optional[int] = None, random_state: Optional[int] = None):
         """
         Initialize the Random k-Labelsets (RAkEL) classifier.
 
@@ -38,6 +34,7 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
         self.k = k
         self.n_estimators = n_estimators
         self.random_state = random_state
+        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -61,6 +58,7 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
         self : "RAkELClassifier"
             Fitted estimator.
         """
+        X = self.scaler_.fit_transform(X)
         Y = numpy.array(Y)
         n_samples, q = Y.shape
         self.q_ = q
@@ -128,6 +126,7 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
         Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         # Initialize vote counts and classifier inclusion counts.
         votes = numpy.zeros((n_samples, self.q_))
@@ -174,6 +173,7 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
         probabilities : ArrayLike of shape (n_samples, n_labels)
             The estimated probability for each label.
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         votes = numpy.zeros((n_samples, self.q_))
         tau = numpy.zeros((n_samples, self.q_))
