@@ -1,10 +1,11 @@
 from itertools import combinations
-from typing import cast
+from typing import cast, Optional
 
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
 from .functions import assess
@@ -12,12 +13,8 @@ from .preconditions import check_same_rows, check_binary_matrices
 
 
 class PStClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self,
-        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-        pruning_value: int = 2,
-        max_reintroduced: int = 1,
-    ):
+    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000), pruning_value: int = 2,
+                 max_reintroduced: int = 1):
         """
         Initialize the Pruned Sets classifier.
 
@@ -38,6 +35,7 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         self.base_estimator = base_estimator
         self.pruning_value = pruning_value
         self.max_reintroduced = max_reintroduced
+        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -64,6 +62,7 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         self : "PStClassifier"
             Fitted estimator.
         """
+        X = self.scaler_.fit_transform(X)
         self.n_labels_ = Y.shape[1]
 
         # Convert each label vector to a tuple to serve as a dictionary key.
@@ -155,6 +154,7 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
+        X = self.scaler_.transform(X)
         Y_class_pred = self.classifier_.predict(X)
         Y_pred = numpy.array([self.class_to_label_[cls] for cls in Y_class_pred])
         return Y_pred
@@ -177,6 +177,7 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
         Y_proba : ArrayLike of shape (n_samples, n_labels)
             The estimated probabilities for each label.
         """
+        X = self.scaler_.transform(X)
         proba = self.classifier_.predict_proba(X)  # shape: (n_samples, n_classes)
         Y_proba = numpy.dot(proba, self.class_label_matrix_)
         return Y_proba
