@@ -1,9 +1,10 @@
-from typing import TypeVar, cast
+from typing import TypeVar, cast, Optional
 
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
@@ -20,6 +21,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         """
         self.classifiers_ = None
         self.base_estimator = base_estimator
+        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -38,6 +40,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         -------
         self : "BRClassifier"
         """
+        X = self.scaler_.fit_transform(X)
         n_labels = Y.shape[1]
         self.classifiers_ = []
         T = TypeVar("T", bound=ClassifierMixin)
@@ -62,6 +65,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         n_labels = len(self.classifiers_)
         Y_pred = numpy.zeros((n_samples, n_labels))
@@ -86,6 +90,7 @@ class BRClassifier(BaseEstimator, ClassifierMixin):
         Y_proba : ArrayLike of shape (n_samples, n_labels)
             The predicted probability matrix.
         """
+        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         n_labels = len(self.classifiers_)
         Y_proba = numpy.zeros((n_samples, n_labels))
