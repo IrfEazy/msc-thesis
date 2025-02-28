@@ -4,7 +4,6 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
 from .functions import assess
@@ -23,7 +22,6 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         self.pairwise_classifiers_ = None
         self.aux_classifiers_ = None
         self.base_estimator = base_estimator
-        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -42,7 +40,6 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         -------
         self : CLRClassifier
         """
-        X = self.scaler_.fit_transform(X)
         # Validate inputs
         Y = numpy.array(Y)
         n_samples, self.q_ = Y.shape
@@ -95,7 +92,6 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         calibrated_scores : ArrayLike of shape (n_samples, n_labels)
             Calibrated scores for each label. A positive score suggests relevance.
         """
-        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         votes = numpy.zeros((n_samples, self.q_))
 
