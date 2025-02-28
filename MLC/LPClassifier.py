@@ -4,7 +4,6 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_X_y
 from typing_extensions import TypeVar
 
@@ -28,7 +27,6 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         self.label_to_class_ = None
         self.n_labels_ = None
         self.base_estimator = base_estimator
-        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -51,7 +49,6 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         self : "LPClassifier"
             Fitted estimator.
         """
-        X = self.scaler_.fit_transform(X)
         X, Y = check_X_y(X, Y, multi_output=True)
         Y = numpy.array(Y)
         self.n_labels_ = Y.shape[1]
@@ -100,7 +97,6 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         Y_pred : ArrayLike of shape (n_samples, n_labels)
             The predicted binary label matrix.
         """
-        X = self.scaler_.transform(X)
         Y_class_pred = self.classifier_.predict(X)
         Y_pred = numpy.array([self.class_to_label_[cls] for cls in Y_class_pred])
         return Y_pred
@@ -123,7 +119,6 @@ class LPClassifier(BaseEstimator, ClassifierMixin):
         Y_proba : ArrayLike of shape (n_samples, n_labels)
             The estimated probability for each label.
         """
-        X = self.scaler_.transform(X)
         # Get multi-class probability estimates.
         proba = self.classifier_.predict_proba(X)  # shape: (n_samples, n_classes)
         # Compute marginal probabilities: dot the probability matrix with the class label matrix.
