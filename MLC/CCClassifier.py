@@ -27,7 +27,6 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         self.base_estimator = base_estimator
         self.order = order
         self.chain = []
-        self.scaler_ = StandardScaler()
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -42,7 +41,6 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y : ArrayLike
             Label matrix of shape (n_samples, n_labels).
         """
-        X = self.scaler_.fit_transform(X)
         _, n_labels = Y.shape
         self.order_ = self.order if self.order is not None else range(n_labels)
         X_extended = numpy.copy(X)
@@ -71,7 +69,6 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y_pred: ArrayLike
             Predicted label matrix of shape (n_samples, n_labels).
         """
-        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         X_extended = numpy.copy(X)
         Y_pred = numpy.zeros((n_samples, len(self.chain)))
@@ -98,7 +95,6 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         Y_proba : ArrayLike
             Predicted label probability matrix of shape (n_samples, n_labels).
         """
-        X = self.scaler_.transform(X)
         n_samples = X.shape[0]
         X_extended = numpy.copy(X)
         Y_proba = numpy.zeros((n_samples, len(self.chain)))
