@@ -1,7 +1,26 @@
+import re
+import string
+import unicodedata
+
+import nltk
+import numpy as np
+import pandas as pd
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
+from nltk import WordNetLemmatizer, word_tokenize
 from numpy.typing import ArrayLike
-import pandas as pd
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    hamming_loss,
+    roc_auc_score,
+)
+
+nltk.download("stopwords")
+nltk.download("wordnet")
+
+from nltk.corpus import stopwords, wordnet
 
 
 def construct_hierarchy(category_hierarchy: List[Dict]) -> Dict:
@@ -19,10 +38,13 @@ def construct_hierarchy(category_hierarchy: List[Dict]) -> Dict:
         A nested dictionary representing the tree structure.
     """
     category_tree = {}
+
     for category_entry in category_hierarchy:
         current_node = category_tree
+
         for category_segment in category_entry["label"].strip("/").split("/"):
             current_node = current_node.setdefault(category_segment, {})
+
     return category_tree
 
 
@@ -45,6 +67,7 @@ def flatten_dict_keys(
         A list of paths representing keys in the dictionary.
     """
     accumulated_keys = [] if accumulated_keys is None else accumulated_keys
+
     if isinstance(input_dict, dict):
         for key, value in input_dict.items():
             accumulated_keys = flatten_dict_keys(
@@ -52,10 +75,11 @@ def flatten_dict_keys(
             )
     else:
         accumulated_keys = [input_dict]
+
     return accumulated_keys
 
 
-def translate_source_categories(
+def translate_src_categories(
     source_categories: List[str], category_mapping: Dict[str, str]
 ) -> List[str]:
     """
@@ -78,7 +102,7 @@ def translate_source_categories(
     return list(mapped_targets) if mapped_targets else ["other"]
 
 
-def replace_text_components(
+def replace_txt_components(
     text: str,
     replace_emails: bool = True,
     replace_urls: bool = True,
@@ -112,8 +136,6 @@ def replace_text_components(
     str : str
         Text with specified components replaced.
     """
-    import re
-
     # Replace email addresses
     if replace_emails:
         text = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "", text)
@@ -174,9 +196,6 @@ def clean_text(
     str : str
         Cleaned and preprocessed text.
     """
-    import re
-    import unicodedata
-
     # Convert text to lowercase if specified
     if lowercase:
         text = text.lower()
@@ -216,11 +235,6 @@ def get_wordnet_pos(treebank_tag):
     Returns:
         str: Corresponding WordNet POS tag.
     """
-    import nltk
-
-    nltk.download("wordnet")
-    from nltk.corpus import wordnet
-
     if treebank_tag.startswith("J"):
         return wordnet.ADJ
     elif treebank_tag.startswith("V"):
@@ -248,9 +262,6 @@ def lemmatize_text(text, lemmatizer=None):
     -------
         str: Lemmatized text.
     """
-    import nltk
-    from nltk import WordNetLemmatizer, word_tokenize
-
     lemmatizer = WordNetLemmatizer() if lemmatizer is None else lemmatizer
     # Tokenize the text
     tokens = word_tokenize(text)
@@ -282,12 +293,6 @@ def remove_stopwords(text, language="english", custom_stopwords=None, lowercase=
     Returns:
         str: Text with stopwords removed.
     """
-    import nltk
-    from nltk import word_tokenize
-
-    nltk.download("stopwords")
-    from nltk.corpus import stopwords
-
     # Convert text to lowercase if specified
     text = text.lower() if lowercase else text
 
@@ -311,8 +316,6 @@ def remove_stopwords(text, language="english", custom_stopwords=None, lowercase=
 def load_word2vec_dict(
     model_path: Path, embedding_dim: int
 ) -> dict[Union[str, list[str]], ArrayLike]:
-    import numpy as np
-
     embeddings_dict = {}
     with open(model_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -346,8 +349,6 @@ def tokenizer_transform(
     encoded_sentences : ArrayLike
         The embeddings of the sentences.
     """
-    from sentence_transformers import SentenceTransformer
-
     # Preprocess the text
     sentences = x.tolist()
     preprocessing_list = [] if preprocessing_list is None else preprocessing_list
@@ -358,10 +359,6 @@ def tokenizer_transform(
 
 
 def preprocess_texts(list_str, model_path, embedding_dim):
-    import re
-    import string
-    import numpy as np
-
     if embedding_dim is None:
         return tokenizer_transform(x=list_str, embedder_addr=model_path)
 
@@ -415,13 +412,6 @@ def assess(Y: ArrayLike, Y_pred: ArrayLike) -> dict[str, float]:
     metrics : dict[str, float]
         Dictionary containing accuracy, micro F1 score, and hamming loss.
     """
-    from sklearn.metrics import (
-        accuracy_score,
-        classification_report,
-        hamming_loss,
-        roc_auc_score,
-    )
-
     accuracy = accuracy_score(Y, Y_pred)
 
     auc_score_micro = roc_auc_score(Y, Y_pred, average="micro")
