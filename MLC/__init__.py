@@ -17,5 +17,5 @@ __all__ = [
     "CDNClassifier",
     "MBRClassifier",
     "RAkELClassifier",
-    "HOMERClassifier"
+    "HOMERClassifier",
 ]

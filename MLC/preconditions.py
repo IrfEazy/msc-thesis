@@ -1,7 +1,6 @@
 import inspect
-from typing import Callable
-
 import numpy
+from typing import Callable
 
 
 def check_binary_matrices(*param_names: str) -> Callable:
@@ -51,7 +50,7 @@ def check_binary_matrices(*param_names: str) -> Callable:
 def check_same_columns(*param_names: str) -> Callable:
     """
     Decorator to check that specified parameters have the same number of columns.
-    
+
     Parameters
     ----------
     param_names : str
@@ -66,7 +65,7 @@ def check_same_columns(*param_names: str) -> Callable:
     def decorator(func: Callable) -> Callable:
         """
         Decorator to check that specified parameters have the same number of columns.
-        
+
         Parameters
         ----------
         func : Callable
@@ -81,13 +80,12 @@ def check_same_columns(*param_names: str) -> Callable:
         def wrapper(*args, **kwargs):
             """
             Wrapper function that checks the specified parameters for column consistency.
-            
+
             Returns
             -------
             func : Callable
                 Function that wraps the function requiring the check.
             """
-
             # Get function signature and bind arguments
             sig = inspect.signature(func)
             bound_args = sig.bind(*args, **kwargs)

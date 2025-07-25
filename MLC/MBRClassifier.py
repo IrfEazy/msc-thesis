@@ -1,18 +1,20 @@
-from typing import cast
+from typing import cast, TypeVar
 
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from typing_extensions import TypeVar
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
 class MBRClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-                 meta_estimator: ClassifierMixin = LogisticRegression(max_iter=1000)):
+    def __init__(
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        meta_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+    ):
         """
         Parameters
         ----------
@@ -53,9 +55,9 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         n_samples, n_labels = Y.shape
         self.n_labels_ = n_labels
 
-        # ------------------------
+        # -----------------------------
         # First Stage: Binary Relevance
-        # ------------------------
+        # -----------------------------
         self.first_stage_classifiers_ = []
         T = TypeVar("T", bound=ClassifierMixin)
         for i in range(n_labels):
@@ -75,9 +77,9 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         # Augment the original features with the first-stage predictions.
         X_meta = numpy.hstack((X, first_stage_predictions))
 
-        # ------------------------
+        # -----------------------------------------
         # Second Stage: Meta-Level Binary Relevance
-        # ------------------------
+        # -----------------------------------------
         self.meta_classifiers_ = []
         for i in range(n_labels):
             clf: T = cast(T, clone(self.meta_estimator))
