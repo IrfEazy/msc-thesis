@@ -1,18 +1,19 @@
-from typing import cast, Optional
+from typing import cast, TypeVar
 
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.validation import check_X_y
-from typing_extensions import TypeVar
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
 class LPClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000)):
+    def __init__(
+        self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000)
+    ):
         """
         Initialize the Label Powerset classifier.
 

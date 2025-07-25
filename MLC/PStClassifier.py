@@ -1,19 +1,21 @@
-from itertools import combinations
-from typing import cast
-
 import numpy
+from itertools import combinations
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from typing_extensions import TypeVar
+from typing import cast, TypeVar
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
 class PStClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000), pruning_value: int = 2,
-                 max_reintroduced: int = 1):
+    def __init__(
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        pruning_value: int = 2,
+        max_reintroduced: int = 1,
+    ):
         """
         Initialize the Pruned Sets classifier.
 

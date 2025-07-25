@@ -1,18 +1,21 @@
-from typing import Optional, cast
-
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from typing_extensions import TypeVar
+from typing import cast, Optional, TypeVar
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
 class RAkELClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000), k: int = 3,
-                 n_estimators: Optional[int] = None, random_state: Optional[int] = None):
+    def __init__(
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        k: int = 3,
+        n_estimators: Optional[int] = None,
+        random_state: Optional[int] = None,
+    ):
         """
         Initialize the Random k-Labelsets (RAkEL) classifier.
 

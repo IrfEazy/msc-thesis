@@ -1,18 +1,22 @@
-from typing import Optional, cast
+from typing import Optional, cast, TypeVar
 
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from typing_extensions import TypeVar
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
 class CDNClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(), n_iterations: int = 100,
-                 burn_in: int = 50, random_state: Optional[int] = None):
+    def __init__(
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(),
+        n_iterations: int = 100,
+        burn_in: int = 50,
+        random_state: Optional[int] = None,
+    ):
         """
         Initialize the Conditional Dependency Network classifier.
 
@@ -58,7 +62,7 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         """
         # Validate inputs
         Y = numpy.array(Y)
-        n_samples, n_labels = Y.shape
+        _, n_labels = Y.shape
         self.n_labels_ = n_labels
         self.n_features_ = X.shape[1]
 

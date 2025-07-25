@@ -1,10 +1,9 @@
-from typing import cast, Optional
+from typing import cast
 
 import numpy
 from numpy._typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 from typing_extensions import TypeVar
 
 from .functions import assess
@@ -12,7 +11,9 @@ from .preconditions import check_same_rows, check_binary_matrices
 
 
 class CCClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(), order=None):
+    def __init__(
+        self, base_estimator: ClassifierMixin = LogisticRegression(), order=None
+    ):
         """
         Initialize the Classifier Chain.
 

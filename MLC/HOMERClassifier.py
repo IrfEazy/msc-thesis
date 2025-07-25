@@ -1,4 +1,4 @@
-from typing import List, Optional, cast
+from typing import cast, List, Optional, TypeVar
 
 import numpy
 from numpy.typing import ArrayLike
@@ -6,7 +6,6 @@ from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
-from typing_extensions import TypeVar
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
@@ -30,8 +29,13 @@ class Node:
 
 
 class HOMERClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000), n_clusters: int = 2,
-                 threshold: float = 0.5, random_state: Optional[int] = None):
+    def __init__(
+        self,
+        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        n_clusters: int = 2,
+        threshold: float = 0.5,
+        random_state: Optional[int] = None,
+    ):
         """
         Initialize the HOMER classifier.
 
