@@ -195,28 +195,6 @@ def add_edges(graph, parent, children):
         add_edges(graph=graph, parent=child, children=sub_children)
 
 
-def get_wordnet_pos(treebank_tag):
-    """
-    Map Treebank POS tags to WordNet POS tags for lemmatization.
-
-    Args:
-        treebank_tag (str): Treebank POS tag.
-
-    Returns:
-        str: Corresponding WordNet POS tag.
-    """
-    if treebank_tag.startswith("J"):
-        return wordnet.ADJ
-    elif treebank_tag.startswith("V"):
-        return wordnet.VERB
-    elif treebank_tag.startswith("N"):
-        return wordnet.NOUN
-    elif treebank_tag.startswith("R"):
-        return wordnet.ADV
-    else:
-        return wordnet.NOUN  # Default to noun if no match
-
-
 def pos_tagging(text, tagset="universal"):
     """
     Perform Part-of-Speech (POS) tagging on the input text.
