@@ -1,72 +1,69 @@
-import re
-import unicodedata
 from collections import Counter
 from copy import copy
 from itertools import combinations
-from typing import Optional, Union, Any, Dict, Tuple, List, Callable
+import re
+import unicodedata
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import nltk
-import numpy
 import numpy as np
 import pandas as pd
-from nltk import WordNetLemmatizer, word_tokenize
-from nltk.corpus import stopwords
+from nltk import WordNetLemmatizer
+from nltk.corpus import stopwords, wordnet
+from nltk.tokenize import word_tokenize
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 from sklearn.base import BaseEstimator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, f1_score, precision_score, \
-    recall_score, hamming_loss, coverage_error, accuracy_score
+from sklearn.metrics import (
+    f1_score,
+    precision_score,
+    recall_score,
+    hamming_loss,
+    accuracy_score,
+    coverage_error,
+    classification_report,
+)
 from sklearn.model_selection import cross_val_predict
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils import compute_sample_weight
-from tqdm.notebook import tqdm
 from xgboost import XGBClassifier
 
-from preprocess_functions import get_wordnet_pos
-
 # Ensure necessary NLTK resources are downloaded
-nltk.download('punkt')
-nltk.download('wordnet')
-nltk.download('averaged_perceptron_tagger')
-nltk.download('universal_tagset')
-nltk.download('stopwords')
+nltk.download("punkt")
+nltk.download("wordnet")
+nltk.download("averaged_perceptron_tagger")
+nltk.download("universal_tagset")
+nltk.download("stopwords")
 
 BASE_CLASSIFIERS = {
-    'logistic_regression': LogisticRegression,
-    'gaussian_naive_bayes': GaussianNB,
-    'decision_tree': DecisionTreeClassifier,
-    'svm': SVC,
-    'random_forest': RandomForestClassifier,
-    'xgb': XGBClassifier
+    "logistic_regression": LogisticRegression,
+    "gaussian_naive_bayes": GaussianNB,
+    "decision_tree": DecisionTreeClassifier,
+    "svm": SVC,
+    "random_forest": RandomForestClassifier,
+    "xgb": XGBClassifier,
 }
 
 CLASSIFIERS_BOUNDS = {
-    'logistic_regression': {
-        'C': (1e-2, 1e2),
-        'penalty': (0, 1),
-        'solver': (0, 0.25)
-    }
+    "logistic_regression": {"C": (1e-2, 1e2), "penalty": (0, 1), "solver": (0, 0.25)}
 }
 
-PENALTY_DICT = {
-    0: 'l1',
-    1: 'l2'
-}
+PENALTY_DICT = {0: "l1", 1: "l2"}
 
-SOLVER_DICT = {
-    0: 'liblinear'
-}
-
-
-
-
+SOLVER_DICT = {0: "liblinear"}
 
 
 class CalibratedLabelRankClassifier(BaseEstimator):
-    def __init__(self, classifier: Any = None, classes: List[str] = None, random_state: int = None):
+    def __init__(
+        self,
+        classifier: Any = None,
+        classes: List[str] = None,
+        random_state: int = None,
+    ):
         self.classifier = classifier
         self.classes = classes
         self.random_state = random_state
@@ -74,7 +71,7 @@ class CalibratedLabelRankClassifier(BaseEstimator):
         self.artificial_classifiers = {}
 
     def fit(self, x: np.ndarray[Any, np.dtype[float]], y: List[List[int]]):
-        for (li, lj) in combinations(iterable=range(len(self.classes)), r=2):
+        for li, lj in combinations(iterable=range(len(self.classes)), r=2):
             x_pair = []
             y_pair = []
 
@@ -93,7 +90,9 @@ class CalibratedLabelRankClassifier(BaseEstimator):
                 self.pairwise_classifiers[(li, lj)] = model.fit(
                     X=x_pair,
                     y=y_pair,
-                    sample_weight=compute_sample_weight(class_weight='balanced', y=y_pair)
+                    sample_weight=compute_sample_weight(
+                        class_weight="balanced", y=y_pair
+                    ),
                 )
 
         for li in range(len(self.classes)):
@@ -112,7 +111,9 @@ class CalibratedLabelRankClassifier(BaseEstimator):
             self.artificial_classifiers[li] = model.fit(
                 X=x_artificial,
                 y=y_artificial,
-                sample_weight=compute_sample_weight(class_weight='balanced', y=y_artificial)
+                sample_weight=compute_sample_weight(
+                    class_weight="balanced", y=y_artificial
+                ),
             )
 
         return self
@@ -128,7 +129,9 @@ class CalibratedLabelRankClassifier(BaseEstimator):
             scores = np.zeros(shape=num_labels)  # Initialize scores for each label
 
             for (li, lj), model in self.pairwise_classifiers.items():
-                y_proj = model.predict(X=instance.reshape(1, -1))[0]  # Predict for this pair
+                y_proj = model.predict(X=instance.reshape(1, -1))[
+                    0
+                ]  # Predict for this pair
 
                 if y_proj == 1:  # li is more relevant
                     scores[li] += 1
@@ -152,7 +155,7 @@ class CalibratedLabelRankClassifier(BaseEstimator):
 
         y_proj = np.zeros(shape=(num_samples, num_labels), dtype=int)
 
-        for i, (ranking, bipartition) in enumerate(zip(rankings, bipartitions)):
+        for i, (_, bipartition) in enumerate(zip(rankings, bipartitions)):
             relevant_labels, _ = bipartition  # Extract relevant labels
 
             for label in relevant_labels:
@@ -162,7 +165,12 @@ class CalibratedLabelRankClassifier(BaseEstimator):
 
 
 class ChainOfClassifiers(BaseEstimator):
-    def __init__(self, classifier: Any = None, classes: List[str] = None, random_state: int = None):
+    def __init__(
+        self,
+        classifier: Any = None,
+        classes: List[str] = None,
+        random_state: int = None,
+    ):
         self.classifier = classifier
         self.classes = classes
         self.random_state = random_state
@@ -184,7 +192,9 @@ class ChainOfClassifiers(BaseEstimator):
             model.fit(
                 X=x_augmented,
                 y=y[:, label_idx],
-                sample_weight=compute_sample_weight(class_weight='balanced', y=y[:, label_idx])
+                sample_weight=compute_sample_weight(
+                    class_weight="balanced", y=y[:, label_idx]
+                ),
             )
 
             self.classifiers_chain.append(model)
@@ -218,7 +228,12 @@ class ChainOfClassifiers(BaseEstimator):
 
 
 class LabelPowersetClassifier(BaseEstimator):
-    def __init__(self, classifier: Any, label_map: Dict[int, Tuple[Any]], random_state: int = None):
+    def __init__(
+        self,
+        classifier: Any,
+        label_map: Dict[int, Tuple[Any]],
+        random_state: int = None,
+    ):
         self.classifier = classifier
         self.label_map = label_map
         self.random_state = random_state
@@ -233,8 +248,14 @@ class LabelPowersetClassifier(BaseEstimator):
 
 
 class PrunedSetsClassifier(BaseEstimator):
-    def __init__(self, classifier: Any, label_map: dict[Any, Any], max_sub_samples: int = 3, pruning_threshold: int = 5,
-                 random_state: int = None):
+    def __init__(
+        self,
+        classifier: Any,
+        label_map: dict[Any, Any],
+        max_sub_samples: int = 3,
+        pruning_threshold: int = 5,
+        random_state: int = None,
+    ):
         self.classifier = classifier
         self.label_map = label_map
         self.max_sub_samples = max_sub_samples
@@ -271,7 +292,9 @@ class ConditionalDependencyNetwork(BaseEstimator):
 
         for label_idx in range(self.num_labels):
             # Create dataset for current label
-            x_augmented = np.hstack((x, np.delete(y, label_idx, axis=1)))  # Remove current label
+            x_augmented = np.hstack(
+                (x, np.delete(y, label_idx, axis=1))
+            )  # Remove current label
             y_label = y[:, label_idx]
 
             # Train a binary classifier
@@ -366,7 +389,7 @@ class MetaBinaryRelevance(BaseEstimator):
                 X=x,
                 y=y[:, label_idx],
                 cv=self.n_splits,
-                method='predict_proba'
+                method="predict_proba",
             )[:, 1]
             # Train on the full training set and generate predictions
             model.fit(X=x, y=y[:, label_idx])
@@ -419,15 +442,12 @@ class MetaBinaryRelevance(BaseEstimator):
 
 
 def prune_and_subsample(
-        x: list[Any],
-        y: list[list[Any]],
-        pruning_threshold: float,
-        max_sub_samples: int
+    x: list[Any], y: list[list[Any]], pruning_threshold: float, max_sub_samples: int
 ) -> tuple[
-    numpy.ndarray[Any, numpy.dtype],
-    numpy.ndarray[Any, numpy.dtype],
+    np.ndarray[Any, np.dtype[Any]],
+    np.ndarray[Any, np.dtype[Any]],
     dict[int, Union[tuple[Any, ...], tuple[int, ...]]],
-    numpy.ndarray[Any, numpy.dtype]
+    np.ndarray[Any, np.dtype[Any]],
 ]:
     """
     Prune and subsample the given samples.
@@ -469,10 +489,14 @@ def prune_and_subsample(
             lbl_subsets = []
 
             for i in range(2 ** len(lbl_tuple)):
-                lbl_subset = tuple((lbl_tuple[j] if (i >> j) & 1 else 0) for j in range(len(lbl_tuple)))
+                lbl_subset = tuple(
+                    (lbl_tuple[j] if (i >> j) & 1 else 0) for j in range(len(lbl_tuple))
+                )
                 lbl_subsets.append(lbl_subset)
 
-            lbl_subsets = [subset for subset in lbl_subsets if subset in frequent_label_sets]
+            lbl_subsets = [
+                subset for subset in lbl_subsets if subset in frequent_label_sets
+            ]
             lbl_subsets = lbl_subsets[:max_sub_samples]
 
             for subset in lbl_subsets:
@@ -484,99 +508,72 @@ def prune_and_subsample(
                 y_new.append(label_map[subset])
                 index_mapping.append(idx)
 
-    return np.array(x_new), np.array(y_new), {v: k for k, v in label_map.items()}, np.array(index_mapping)
+    return (
+        np.array(x_new),
+        np.array(y_new),
+        {v: k for k, v in label_map.items()},
+        np.array(index_mapping),
+    )
 
 
 def assess_models(
-        x: np.ndarray[Any, np.dtype[float]],
-        y: np.ndarray[Any, np.dtype[int]],
-        technique: dict[str, Any],
-        classes: List[str]
+    x: np.ndarray[Any, np.dtype[float]],
+    y: np.ndarray[Any, np.dtype[int]],
+    technique: dict[str, Any],
+    classes: List[str],
 ) -> dict[str, Any]:
-    model_performance = {
-        'Accuracy': 0
-    }
+    model_performance = {"Accuracy": 0}
 
     for k, v in technique.items():
         y_predict = v.predict(x)
         accuracy_i = accuracy_score(y_true=y, y_pred=y_predict)
 
-        if model_performance['Accuracy'] < accuracy_i:
-            model_performance['Classifier'] = k
-            model_performance['Model'] = v
-            model_performance['Accuracy'] = accuracy_i
+        if model_performance["Accuracy"] < accuracy_i:
+            model_performance["Classifier"] = k
+            model_performance["Model"] = v
+            model_performance["Accuracy"] = accuracy_i
 
-            model_performance['Precision example-based'] = precision_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='samples',
-                zero_division=0
+            model_performance["Precision example-based"] = precision_score(
+                y_true=y, y_pred=y_predict, average="samples", zero_division=0
             )
 
-            model_performance['Recall example-based'] = recall_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='samples',
-                zero_division=0
+            model_performance["Recall example-based"] = recall_score(
+                y_true=y, y_pred=y_predict, average="samples", zero_division=0
             )
 
-            model_performance['F1 example-based'] = f1_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='samples',
-                zero_division=0
+            model_performance["F1 example-based"] = f1_score(
+                y_true=y, y_pred=y_predict, average="samples", zero_division=0
             )
 
-            model_performance['Hamming loss'] = hamming_loss(y_true=y, y_pred=y_predict)
+            model_performance["Hamming loss"] = hamming_loss(y_true=y, y_pred=y_predict)
 
-            model_performance['Micro precision'] = precision_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='micro',
-                zero_division=0
+            model_performance["Micro precision"] = precision_score(
+                y_true=y, y_pred=y_predict, average="micro", zero_division=0
             )
 
-            model_performance['Micro recall'] = recall_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='micro',
-                zero_division=0
+            model_performance["Micro recall"] = recall_score(
+                y_true=y, y_pred=y_predict, average="micro", zero_division=0
             )
 
-            model_performance['Micro F1'] = f1_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='micro',
-                zero_division=0
+            model_performance["Micro F1"] = f1_score(
+                y_true=y, y_pred=y_predict, average="micro", zero_division=0
             )
 
-            model_performance['Macro precision'] = precision_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='macro',
-                zero_division=0
+            model_performance["Macro precision"] = precision_score(
+                y_true=y, y_pred=y_predict, average="macro", zero_division=0
             )
 
-            model_performance['Macro recall'] = recall_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='macro',
-                zero_division=0
+            model_performance["Macro recall"] = recall_score(
+                y_true=y, y_pred=y_predict, average="macro", zero_division=0
             )
 
-            model_performance['Macro F1'] = f1_score(
-                y_true=y,
-                y_pred=y_predict,
-                average='macro',
-                zero_division=0
+            model_performance["Macro F1"] = f1_score(
+                y_true=y, y_pred=y_predict, average="macro", zero_division=0
             )
 
-            model_performance['Coverage'] = coverage_error(y_true=y, y_score=y_predict)
-            model_performance['Classification'] = classification_report(
-                y_true=y,
-                y_pred=y_predict,
-                target_names=classes,
-                zero_division=0
+            model_performance["Coverage"] = coverage_error(y_true=y, y_score=y_predict)
+            model_performance["Classification"] = classification_report(
+                y_true=y, y_pred=y_predict, target_names=classes, zero_division=0
             )
 
     return model_performance
@@ -584,10 +581,10 @@ def assess_models(
 
 def display_assessments(evaluation: dict):
     for k in evaluation.keys():
-        print(f'{k}:')
+        print(f"{k}:")
         print(f"Best classifier: {evaluation[k]['Classifier']}")
         print(f"Accuracy:\t{evaluation[k]['Accuracy']:.2f}")
-        print(evaluation[k]['Classification'])
+        print(evaluation[k]["Classification"])
 
 
 def sentence_embedding(sentence, tokenizer, model):
@@ -602,7 +599,7 @@ def sentence_embedding(sentence, tokenizer, model):
     Returns:
         numpy.ndarray: Sentence embedding.
     """
-    inputs = tokenizer(sentence, return_tensors='pt', truncation=True, padding=True)
+    inputs = tokenizer(sentence, return_tensors="pt", truncation=True, padding=True)
     outputs = model(**inputs)
     return np.array(outputs.last_hidden_state.mean(dim=1).detach().numpy()).squeeze()
 
@@ -637,16 +634,25 @@ def embed_sentences_batch(sentences, tokenizer, model, batch_size=32):
     sentences = [lemmatize_text(text=s) for s in sentences]
     sentences = [remove_stopwords(text=s) for s in sentences]
     for i in range(0, len(sentences), batch_size):
-        batch = sentences[i:i + batch_size]
-        inputs = tokenizer(batch, return_tensors='pt', truncation=True, padding=True, max_length=512)
+        batch = sentences[i : i + batch_size]
+        inputs = tokenizer(
+            batch, return_tensors="pt", truncation=True, padding=True, max_length=512
+        )
         outputs = model(**inputs)
         batch_embeddings = outputs.last_hidden_state.mean(dim=1).detach().numpy()
         embeddings.extend(batch_embeddings)
     return embeddings
 
 
-def replace_text_components(text, replace_emails=True, replace_urls=True, replace_mentions=True, replace_hashtags=True,
-                            replace_phone_numbers=True, custom_replacements=None):
+def replace_text_components(
+    text,
+    replace_emails=True,
+    replace_urls=True,
+    replace_mentions=True,
+    replace_hashtags=True,
+    replace_phone_numbers=True,
+    custom_replacements=None,
+):
     """
     Replace specific text components (e.g., emails, URLs, mentions, hashtags) with placeholders.
 
@@ -664,23 +670,27 @@ def replace_text_components(text, replace_emails=True, replace_urls=True, replac
     """
     # Replace email addresses
     if replace_emails:
-        text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '', text)
+        text = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "", text)
 
     # Replace URLs
     if replace_urls:
-        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+        text = re.sub(r"https?://\S+|www\.\S+", "", text)
 
     # Replace mentioned users
     if replace_mentions:
-        text = re.sub(r'@\w+', '', text)
+        text = re.sub(r"@\w+", "", text)
 
     # Replace hashtags
     if replace_hashtags:
-        text = re.sub(r'#\w+', '', text)  # Remove hashtags entirely
+        text = re.sub(r"#\w+", "", text)  # Remove hashtags entirely
 
     # Replace phone numbers
     if replace_phone_numbers:
-        text = re.sub(r'\b(?:\+\d{1,2}\s?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}\b', '', text)
+        text = re.sub(
+            r"\b(?:\+\d{1,2}\s?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}\b",
+            "",
+            text,
+        )
 
     # Apply custom replacements if provided
     if custom_replacements is not None:
@@ -690,7 +700,13 @@ def replace_text_components(text, replace_emails=True, replace_urls=True, replac
     return text
 
 
-def clean_text(text, remove_punctuation=True, remove_emojis=True, normalize_whitespace=True, lowercase=True):
+def clean_text(
+    text,
+    remove_punctuation=True,
+    remove_emojis=True,
+    normalize_whitespace=True,
+    lowercase=True,
+):
     """
     Clean and preprocess text data for machine learning tasks.
 
@@ -710,23 +726,49 @@ def clean_text(text, remove_punctuation=True, remove_emojis=True, normalize_whit
 
     # Remove punctuation if specified
     if remove_punctuation:
-        text = re.sub(r'[^\w\s]', '', text)
+        text = re.sub(r"[^\w\s]", "", text)
 
     # Normalize whitespace if specified
     if normalize_whitespace:
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r"\s+", " ", text).strip()
 
     # Remove emojis and emoticons if specified
     if remove_emojis:
         # Remove emojis and emoticons using Unicode ranges
-        text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+        text = re.sub(r"[\U00010000-\U0010ffff]", "", text)
         # Remove additional emoticons and symbols
-        text = re.sub(r'[\u2600-\u26FF\u2700-\u27BF]', '', text)
+        text = re.sub(r"[\u2600-\u26FF\u2700-\u27BF]", "", text)
 
     # Normalize Unicode characters (e.g., convert accented characters to their base form)
-    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8', 'ignore')
+    text = (
+        unicodedata.normalize("NFKD", text)
+        .encode("ascii", "ignore")
+        .decode("utf-8", "ignore")
+    )
 
     return text
+
+
+def get_wordnet_pos(treebank_tag):
+    """
+    Map Treebank POS tags to WordNet POS tags for lemmatization.
+
+    Args:
+        treebank_tag (str): Treebank POS tag.
+
+    Returns:
+        str: Corresponding WordNet POS tag.
+    """
+    if treebank_tag.startswith("J"):
+        return wordnet.ADJ
+    elif treebank_tag.startswith("V"):
+        return wordnet.VERB
+    elif treebank_tag.startswith("N"):
+        return wordnet.NOUN
+    elif treebank_tag.startswith("R"):
+        return wordnet.ADV
+    else:
+        return wordnet.NOUN  # Default to noun if no match
 
 
 def lemmatize_text(text, lemmatizer=WordNetLemmatizer()):
@@ -754,10 +796,10 @@ def lemmatize_text(text, lemmatizer=WordNetLemmatizer()):
         lemmatized_tokens.append(lemmatized_token)
 
     # Join the lemmatized tokens into a single string
-    return ' '.join(lemmatized_tokens)
+    return " ".join(lemmatized_tokens)
 
 
-def remove_stopwords(text, language='english', custom_stopwords=None, lowercase=True):
+def remove_stopwords(text, language="english", custom_stopwords=None, lowercase=True):
     """
     Remove stopwords from the input text.
 
@@ -787,13 +829,13 @@ def remove_stopwords(text, language='english', custom_stopwords=None, lowercase=
     filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
 
     # Join the filtered tokens into a single string
-    return ' '.join(filtered_tokens)
+    return " ".join(filtered_tokens)
 
 
 def tokenizer_transform(
-        x: pd.Series,
-        embedder_addr: str,
-        preprocessing_list: Optional[list[Callable[[str], str]]] = None,
+    x: pd.Series,
+    embedder_addr: str,
+    preprocessing_list: Optional[list[Callable[[str], str]]] = None,
 ) -> np.ndarray[Any, np.dtype[Any]]:
     """
     Generate embeddings for the sentences in the DataFrame.
@@ -817,12 +859,12 @@ def tokenizer_transform(
 
 
 def tokenizer_transform_old(
-        x: pd.Series,
-        tokenizer,
-        embedder,
-        text_preprocessors=None,
-        batch_size: int = 128,
-        max_length: int = 512
+    x: pd.Series,
+    tokenizer,
+    embedder,
+    text_preprocessors=None,
+    batch_size: int = 128,
+    max_length: int = 512,
 ) -> np.ndarray[Any, np.dtype[Any]]:
     """
     Generate embeddings for the sentences in the DataFrame using a tokenizer and model.
@@ -844,13 +886,13 @@ def tokenizer_transform_old(
     # Generate embeddings in batches
     embeddings = []
     for i in range(0, len(sentences), batch_size):
-        batch = sentences[i:i + batch_size]
+        batch = sentences[i : i + batch_size]
         inputs = tokenizer(
             batch,
-            return_tensors='pt',
+            return_tensors="pt",
             truncation=True,
             padding=True,
-            max_length=max_length
+            max_length=max_length,
         )
         outputs = embedder(**inputs)
         batch_embeddings = outputs.last_hidden_state.mean(dim=1).detach().numpy()
