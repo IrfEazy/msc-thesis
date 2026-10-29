@@ -6,6 +6,7 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - `MLC/` - installable multi-label classifier package (see `MLC/AGENTS.md`).
 - `notebooks/` - pipeline notebooks and `notebooks/utils.py` (see `notebooks/AGENTS.md`).
 - `device.py` - XGBoost device selection; `scripts/export_kaggle_requirements.py` - writes `requirements-kaggle.txt`.
+- `thesis/` - LaTeX thesis sources (see `thesis/AGENTS.md`).
 - `utils.py`, `preprocess_functions.py` - root helper modules (which notebooks import them: `notebooks/AGENTS.md`).
 - `data/` - datasets (local only).
 

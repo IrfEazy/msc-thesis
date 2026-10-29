@@ -1,0 +1,18 @@
+# MSc thesis (LaTeX)
+
+LaTeX source of the MSc thesis, written with the PoliMi3i class.
+
+## Structure
+- `Thesis.tex` - main file (`\documentclass` `Configuration_Files/PoliMi3i_thesis`, `\input` `Configuration_Files/config`, chapters via `\include`, `\bibliography{Thesis_bibliography}`).
+- Chapters: `Introduction.tex`, `State_of_the_art.tex`, `Methodology.tex`, `Implementation_and_results.tex`, `Conclusions.tex`.
+- `Thesis_bibliography.bib` - BibTeX database (run through bibtex by latexmk).
+- `Configuration_Files/` - class file and `config.tex` (front matter settings).
+- `Images/` - figures referenced from the chapters.
+
+## Build
+From the repo root (no shell-escape):
+
+    latexmk -cd -pdf -interaction=nonstopmode -halt-on-error thesis/Thesis.tex
+
+- The PDF and LaTeX auxiliary files are written next to the sources and are gitignored (`thesis/.gitignore`); do not commit them.
+- Results and statistics quoted in `Implementation_and_results.tex` must stay aligned with the experiment outputs in the repo (`notebooks/`, `MLC/`).

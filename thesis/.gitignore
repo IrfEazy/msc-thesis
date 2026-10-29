@@ -1,0 +1,21 @@
+# LaTeX build artefacts (latexmk / pdflatex / bibtex)
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+*.run.xml
+*-blx.bib
+*.xdv
+*.nav
+*.snm
+*.idx
+*.ilg
+*.ind
+Thesis.pdf
