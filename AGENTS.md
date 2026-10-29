@@ -20,7 +20,13 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - GPU experiments run on Kaggle without `uv sync` (it would replace the image's CUDA stack): upload the repo code, then `pip install -r requirements-kaggle.txt`. That file is exported from `uv.lock` without the packages listed in `[tool.kaggle-export] preinstalled` (`pyproject.toml`) or the dependencies only they need (`uv export --prune`); regenerate it with `uv run python scripts/export_kaggle_requirements.py` after changing dependencies or that list. Pinned transitive constraints may still upgrade image packages, so check the pip output and installed versions.
 - `device.py` `select_device()` picks the XGBoost device from env `COMPUTE_DEVICE` (`auto` default, `cpu`, `cuda`; `cuda` without CUDA raises); `auto` uses CUDA only if torch sees a GPU.
 - Root modules import nltk, sentence-transformers, xgboost, pandas (`utils.py`), emoji and pydot (`preprocess_functions.py`). They call `nltk.download` at import (network access).
-- No tests, lint or CI config exist.
+- No tests, lint or CI config exist for the code itself.
+
+## Notebook runner
+- `experiments.toml` is the declarative per-notebook manifest (local vs Kaggle target, cwd, env, inputs, outputs, static blocks, archives); `scripts/run_notebooks.py` executes it generically.
+- `uv run python scripts/run_notebooks.py --prepare` extracts the data archives, `--list` shows the manifest, `--target local [--only NAME]` runs local notebooks headlessly (Kaggle ones are never run by it).
+- Results go to `runs/<UTC timestamp>/` (gitignored, or `--out DIR`): `summary.json`, `summary.md`, executed copies in `notebooks/`, logs in `logs/`. Statuses: `passed`, `passed-with-blocked`, `blocked` (static reason or missing inputs; not executed), `failed`, `timeout`, `skipped`. Exit code is non-zero only for `failed`/`timeout`.
+- Environment precedence: variables already in the process environment win over manifest `[env]` and notebook `env`.
 - Run code from the repo root: notebooks import root modules and `notebooks.utils`.
 
 ## Duplication (check which copy a caller imports before editing)

@@ -24,4 +24,5 @@
 
 ## Editing
 - Edit source cells only; do not rewrite outputs or metadata unless asked.
-- The Cotov (NistPosts) dataset is unrecoverable; its sections in `filter.ipynb` and `SystemLabelAssignment.ipynb` print a `BLOCKED:` line and are skipped when the file is missing (the notebook runner reports them as blocked).
+- The Cotov (NistPosts) dataset is unrecoverable: the "Performance over Cotov's Dataset" section of `filter.ipynb` and the "Anastasia's Dataset" section (`data/anastasia.csv`, the same dataset, by Anastasia Cotov) of `SystemLabelAssignment.ipynb` print a `BLOCKED:` line and are skipped, and `scripts/run_notebooks.py` reports them as blocked.
+- `experiments.toml` (repo root) declares per-notebook targets (local vs Kaggle) and run settings.
