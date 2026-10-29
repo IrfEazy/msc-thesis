@@ -16,10 +16,8 @@
 ## Recorded Python versions (`language_info.version`)
 - 3.10.14: `MultiLabelClassification*`; 3.11.13: `filter`, `MLC_Notebook`; 3.13.2: `MLCCS`, `MLCGeneral`, `Train-Test split`; 2.7.6: `SystemLabelAssignment` (likely stale metadata).
 
-## Known stale imports
-- `filter.ipynb` imports `replace_text_components` from `notebooks.utils`, which defines only `replace_txt_components`.
-- `Train-Test split.ipynb` imports `translate_source_categories`, but `notebooks/utils.py` defines `translate_src_categories`.
-- `MultiLabelClassificationSMOTE.ipynb` imports `MultiLabelClassifier` from `utils`, which does not define it.
+## Legacy notebook
+- `MultiLabelClassificationSMOTE.ipynb` is legacy and does not run: it imports `MultiLabelClassifier` and SMOTE helpers from `utils`, which were deliberately removed in commit 16e936a. They are recoverable from `16e936a^`, which also needed `bayes_opt`.
 
 ## Editing
 - Edit source cells only; do not rewrite outputs or metadata unless asked.
