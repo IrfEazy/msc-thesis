@@ -352,31 +352,80 @@ def cmd_push(args, manifest, cfg):
     if not (out / "datasets").is_dir():
         sys.exit(f"nothing built in {out}; run `build` first")
     sha = rn.git("rev-parse", "--short", "HEAD") or "unknown"
-    for sub, slug in (("code", cfg["code_dataset"]), ("data", cfg["data_dataset"])):
-        ref, path = f"{cfg['owner']}/{slug}", str(out / "datasets" / sub)
-        if args.dry_run:
-            print("# create if absent, otherwise version:")
-            run_cmd(["kaggle", "datasets", "create", "-p", path, "-r", "zip"], True)
-            run_cmd(["kaggle", "datasets", "version", "-p", path, "-m", sha, "-r", "zip"], True)
-            continue
-        cmd = (["kaggle", "datasets", "version", "-p", path, "-m", sha, "-r", "zip"]
-               if dataset_exists(ref) else ["kaggle", "datasets", "create", "-p", path, "-r", "zip"])
-        if run_cmd(cmd, False):
-            return 1
-        timeout = int(cfg.get("dataset_ready_timeout", 900))
-        if not wait_dataset_ready(ref, timeout):
-            print(f"error: dataset {ref} not ready after {timeout}s; aborting before kernel pushes", file=sys.stderr)
-            return 1
+    if not args.kernels_only:
+        for sub, slug in (("code", cfg["code_dataset"]), ("data", cfg["data_dataset"])):
+            ref, path = f"{cfg['owner']}/{slug}", str(out / "datasets" / sub)
+            if args.dry_run:
+                print("# create if absent, otherwise version:")
+                run_cmd(["kaggle", "datasets", "create", "-p", path, "-r", "zip"], True)
+                run_cmd(["kaggle", "datasets", "version", "-p", path, "-m", sha, "-r", "zip"], True)
+                continue
+            cmd = (["kaggle", "datasets", "version", "-p", path, "-m", sha, "-r", "zip"]
+                   if dataset_exists(ref) else ["kaggle", "datasets", "create", "-p", path, "-r", "zip"])
+            if run_cmd(cmd, False):
+                return 1
+            timeout = int(cfg.get("dataset_ready_timeout", 900))
+            if not wait_dataset_ready(ref, timeout):
+                print(f"error: dataset {ref} not ready after {timeout}s; aborting before kernel pushes", file=sys.stderr)
+                return 1
+    gpu = bool(cfg.get("accelerator"))
+    limit = int(cfg.get("max_gpu_sessions", 2))
+    interval = int(cfg.get("gpu_poll_interval", 60))
+    pushed, failed = [], []
     for e in entries:
-        kdir = out / "kernels" / kernel_slug(e, args.smoke)
+        slug = kernel_slug(e, args.smoke)
+        kdir = out / "kernels" / slug
         if not kdir.is_dir():
             sys.exit(f"{kdir} not built; run `build{' --smoke' if args.smoke else ''}` first")
         cmd = ["kaggle", "kernels", "push", "-p", str(kdir)]
-        if cfg.get("accelerator"):
+        if gpu:
             cmd += ["--accelerator", cfg["accelerator"]]
-        if run_cmd(cmd, args.dry_run):
-            return 1
+        if args.dry_run:
+            run_cmd(cmd, True)
+            continue
+        if gpu and not args.no_wait:
+            wait_gpu_slot(pushed, limit, interval)
+        if push_kernel(cmd):
+            pushed.append(f"{cfg['owner']}/{slug}")
+        else:
+            failed.append(slug)
+    if failed:
+        print(f"error: {len(failed)} kernel push(es) failed: {', '.join(failed)}", file=sys.stderr)
+        return 1
     return 0
+
+
+def push_kernel(cmd):
+    """Run a kernel push; True only if rc == 0 and the output reports no error."""
+    print("$", " ".join(cmd))
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    text = (r.stdout or "") + (r.stderr or "")
+    if text.strip():
+        print(text.rstrip())
+    if r.returncode != 0 or "error" in text.lower():
+        print(f"error: kernel push failed (rc={r.returncode})", file=sys.stderr)
+        return False
+    return True
+
+
+def active_sessions(refs):
+    """Number of the given kernels whose status is RUNNING or QUEUED."""
+    n = 0
+    for ref in refs:
+        r = subprocess.run(["kaggle", "kernels", "status", ref], capture_output=True, text=True)
+        up = (r.stdout or "").upper()
+        if r.returncode == 0 and ("RUNNING" in up or "QUEUED" in up):
+            n += 1
+    return n
+
+
+def wait_gpu_slot(pushed, limit, interval):
+    while True:
+        n = active_sessions(pushed) if pushed else 0
+        if n < limit:
+            return
+        print(f"waiting for a GPU session slot: {n}/{limit} running or queued; next check in {interval}s")
+        time.sleep(interval)
 
 
 def cmd_status(args, manifest, cfg):
@@ -410,6 +459,8 @@ def main(argv=None):
             p.add_argument("--out")
         if name == "push":
             p.add_argument("--dry-run", action="store_true")
+            p.add_argument("--no-wait", action="store_true", help="do not wait for free GPU sessions")
+            p.add_argument("--kernels-only", action="store_true", help="skip dataset create/version")
         p.set_defaults(fn=fn)
     args = ap.parse_args(argv)
     manifest = rn.load_manifest(args.manifest)

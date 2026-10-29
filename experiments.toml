@@ -19,6 +19,8 @@ accelerator = "NvidiaTeslaT4"  # passed as `kaggle kernels push --accelerator`
 build_dir = "build/kaggle"
 code_license = "CC0-1.0"  # repo is Unlicense
 data_license = "unknown"
+max_gpu_sessions = 2  # push waits until fewer of its pushed kernels are RUNNING/QUEUED
+gpu_poll_interval = 60  # seconds between status polls while waiting
 dataset_ready_timeout = 900  # seconds to wait for each pushed dataset to become ready
 # Repo paths copied into the code dataset (directories: only *.py files).
 code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "requirements-kaggle.txt"]
