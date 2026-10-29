@@ -184,9 +184,10 @@ def preprocess_texts(
 
 
 def map_targets(watson_list, fix_targets):
+    """Return the sorted mapped target labels (``["other"]`` if none map)."""
     targets = set(fix_targets.keys()) & set(watson_list)
     mapped_targets = {fix_targets[category] for category in targets}
-    return list(mapped_targets) if mapped_targets else ["other"]
+    return sorted(mapped_targets) if mapped_targets else ["other"]
 
 
 def add_edges(graph, parent, children):

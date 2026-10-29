@@ -95,11 +95,11 @@ def translate_src_categories(
     Returns
     -------
     mapped_targets : list
-        A list of target categories.
+        A sorted list of target categories (``["other"]`` if none map).
     """
     targets = set(category_mapping.keys()) & set(source_categories)
     mapped_targets = {category_mapping[category] for category in targets}
-    return list(mapped_targets) if mapped_targets else ["other"]
+    return sorted(mapped_targets) if mapped_targets else ["other"]
 
 
 def replace_txt_components(

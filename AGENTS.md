@@ -31,7 +31,7 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 
 ## Duplication (check which copy a caller imports before editing)
 - Text cleaning: `clean_text`, `get_wordnet_pos`, `lemmatize_text`, `remove_stopwords`, `tokenizer_transform` exist under the same name in root `utils.py` and `notebooks/utils.py`; `replace_text_components` (root) vs `replace_txt_components` (notebooks) are near-duplicates.
-- Hierarchy helpers: `preprocess_functions.py` `build_tree`/`extract_keys`/`map_targets` vs `notebooks/utils.py` `construct_hierarchy`/`flatten_dict_keys`/`translate_src_categories` (inferred equivalents).
+- Hierarchy helpers: `preprocess_functions.py` `build_tree`/`extract_keys`/`map_targets` vs `notebooks/utils.py` `construct_hierarchy`/`flatten_dict_keys`/`translate_src_categories` (inferred equivalents). `map_targets` and `translate_src_categories` (and the local `map_targets` copies in `MLCGeneral`/`MLCCS`) return sorted label lists, which the deterministic Train-Test split depends on.
 - `load_word2vec_dict`, `preprocess_texts`: root `preprocess_functions.py` and `notebooks/utils.py`.
 - `assess`: `notebooks/utils.py` and `MLC/functions.py`.
 - Root `utils.py` also has standalone classifier classes (e.g. `CalibratedLabelRankClassifier`, `ChainOfClassifiers`); these are not the `MLC` package.
