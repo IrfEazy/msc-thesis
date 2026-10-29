@@ -13,7 +13,7 @@ def main():
     cmd = ["uv", "export", "--frozen", "--no-hashes", "--no-dev", "--no-emit-project",
            "--no-header", "--no-annotate", "--output-file", str(ROOT / "requirements-kaggle.txt")]
     for name in sorted(set(preinstalled)):
-        cmd += ["--no-emit-package", name]
+        cmd += ["--prune", name]
     return subprocess.run(cmd, cwd=ROOT).returncode
 
 
