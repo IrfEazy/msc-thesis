@@ -23,6 +23,9 @@ REPO = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST = REPO / "experiments.toml"
 BLOCKED_PREFIX = "BLOCKED:"
 FAILING = {"failed", "timeout"}
+ALLOWED_TARGETS = ("local", "kaggle")
+DEFAULT_TARGET = ALLOWED_TARGETS[0]
+REMOTE_TARGETS = ("kaggle",)  # never executed by this runner
 
 
 def utcnow():
@@ -47,7 +50,22 @@ def load_manifest(path):
     manifest.setdefault("env", {})
     manifest.setdefault("archives", [])
     manifest.setdefault("notebooks", [])
+    validate_manifest(manifest)
     return manifest
+
+
+def validate_manifest(manifest):
+    seen = set()
+    for i, n in enumerate(manifest["notebooks"]):
+        missing = [k for k in ("name", "path") if k not in n]
+        if missing:
+            raise ValueError(f"notebooks[{i}]: missing required key(s) {missing}")
+        if n["name"] in seen:
+            raise ValueError(f"duplicate notebook name: {n['name']!r}")
+        seen.add(n["name"])
+        if n.get("target") not in ALLOWED_TARGETS:
+            raise ValueError(f"notebook {n['name']!r}: target {n.get('target')!r} "
+                             f"not in {list(ALLOWED_TARGETS)}")
 
 
 def git(*args):
@@ -78,10 +96,13 @@ def safe_extract(zip_path, dest):
     dest.mkdir(parents=True, exist_ok=True)
     extracted = 0
     with zipfile.ZipFile(zip_path) as zf:
-        for info in zf.infolist():
+        members = zf.infolist()
+        for info in members:  # validate everything before extracting anything
             target = (dest / info.filename).resolve()
             if target != dest and dest not in target.parents:
                 raise ValueError(f"unsafe path in {zip_path}: {info.filename}")
+        for info in members:
+            target = (dest / info.filename).resolve()
             if info.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
                 continue
@@ -105,7 +126,12 @@ def prepare(manifest):
             print(f"prepare: BLOCKED: archive {arc['path']} not found")
             ok = False
         else:
-            n = safe_extract(zip_path, dest)
+            try:
+                n = safe_extract(zip_path, dest)
+            except (ValueError, zipfile.BadZipFile, OSError) as exc:
+                print(f"prepare: FAILED: {arc['path']}: {exc}")
+                ok = False
+                continue
             print(f"prepare: extracted {n} files from {arc['path']} to {arc['dest']}")
     return ok
 
@@ -132,17 +158,26 @@ def blocked_lines(nb):
 
 
 def run_notebook(entry, manifest, run_dir):
+    result = {
+        "name": entry["name"], "path": entry["path"], "target": entry["target"], "status": None,
+        "duration_s": 0.0, "executed_path": None, "failed_cell": None, "error": None,
+        "blocked_cells": [], "missing_inputs": [], "missing_outputs": [],
+    }
+    try:
+        return _run_notebook(entry, manifest, run_dir, result)
+    except Exception as exc:  # setup or bookkeeping failure: isolate to this notebook
+        result["status"] = "failed"
+        result["error"] = f"{type(exc).__name__}: {exc}"[:500]
+        return result
+
+
+def _run_notebook(entry, manifest, run_dir, result):
     import nbformat
     from nbclient import NotebookClient
     from nbclient.exceptions import CellExecutionError
 
     settings = manifest["settings"]
     name = entry["name"]
-    result = {
-        "name": name, "path": entry["path"], "target": entry["target"], "status": None,
-        "duration_s": 0.0, "executed_path": None, "failed_cell": None, "error": None,
-        "blocked_cells": [], "missing_inputs": [], "missing_outputs": [],
-    }
     if entry.get("blocked"):
         result["status"] = "blocked"
         result["error"] = entry["blocked"]
@@ -162,8 +197,10 @@ def run_notebook(entry, manifest, run_dir):
     for k, v in manifest_env.items():
         kernel_env.setdefault(k, v)
 
+    before = {}
     for p in outputs:
         p.parent.mkdir(parents=True, exist_ok=True)
+        before[p] = p.stat().st_mtime_ns if p.exists() else None
     timeout = entry.get("timeout", settings["timeout"])
     nb = nbformat.read(resolve_path(entry["path"], run_dir), as_version=4)
     nb = copy.deepcopy(nb)
@@ -206,10 +243,13 @@ def run_notebook(entry, manifest, run_dir):
     blocked = blocked_lines(nb)
     result["blocked_cells"] = blocked
     if result["status"] == "passed":
-        result["missing_outputs"] = [str(p) for p in outputs if not p.exists()]
+        # An output must be created or modified by this run, not merely pre-exist.
+        result["missing_outputs"] = [
+            str(p) for p in outputs
+            if not p.exists() or p.stat().st_mtime_ns == before[p]]
         if result["missing_outputs"]:
             result["status"] = "failed"
-            result["error"] = "declared outputs missing after execution"
+            result["error"] = "declared outputs missing or not updated by execution"
         elif blocked:
             result["status"] = "passed-with-blocked"
 
@@ -259,12 +299,16 @@ def main(argv=None):
     ap.add_argument("--list", action="store_true", help="list manifest notebooks and exit")
     ap.add_argument("--prepare", action="store_true",
                     help="extract missing archives; alone it does not run notebooks")
-    ap.add_argument("--target", choices=["local", "kaggle"], default=None)
+    ap.add_argument("--target", choices=ALLOWED_TARGETS, default=None)
     ap.add_argument("--only", action="append", default=[], metavar="NAME")
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
 
-    manifest = load_manifest(args.manifest)
+    try:
+        manifest = load_manifest(args.manifest)
+    except (ValueError, OSError, tomllib.TOMLDecodeError) as exc:
+        print(f"invalid manifest {args.manifest}: {exc}", file=sys.stderr)
+        return 2
     entries = manifest["notebooks"]
     if args.list:
         for n in entries:
@@ -276,10 +320,13 @@ def main(argv=None):
         return 2
     if args.prepare:
         ok = prepare(manifest)
+        if not ok:
+            print("prepare failed; notebooks not executed", file=sys.stderr)
+            return 1
         if args.target is None and not args.only:
-            return 0 if ok else 1
+            return 0
 
-    target = args.target or "local"
+    target = args.target or DEFAULT_TARGET
     if args.only:
         entries = [n for n in entries if n["name"] in args.only]
     if args.out:
@@ -291,7 +338,7 @@ def main(argv=None):
     started = utcnow()
     results = []
     for entry in entries:
-        if entry["target"] != target or target == "kaggle":
+        if entry["target"] != target or target in REMOTE_TARGETS:
             r = {"name": entry["name"], "path": entry["path"], "target": entry["target"],
                  "status": "skipped", "duration_s": 0.0, "executed_path": None, "failed_cell": None,
                  "error": None, "blocked_cells": [], "missing_inputs": [], "missing_outputs": []}
