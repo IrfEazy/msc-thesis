@@ -1,0 +1,156 @@
+# Per-notebook run manifest read by scripts/run_notebooks.py (declarative policy only).
+#
+# Placeholders {repo} (absolute repo root) and {run_dir} (absolute output dir of a run) are
+# substituted in cwd, env, inputs and outputs. Relative cwd/inputs/outputs resolve against {repo}.
+# Variables already set in the runner's process environment win over the values below.
+#
+# Unavailable datasets: COTOV_CSV (the Cotov/NistPosts dataset) is not set anywhere because the
+# dataset is unrecoverable. Notebook sections that need such data print a 'BLOCKED: ...' line and
+# are skipped; the runner reports the notebook as 'passed-with-blocked'.
+
+[settings]
+runs_dir = "runs"
+kernel = "python3"
+timeout = 3600  # per-cell seconds
+
+[env]
+# Defaults applied to every notebook.
+
+[[archives]]
+path = "data/tweets-dataset.zip"
+dest = "data/tweets-dataset"
+
+[[archives]]
+path = "data/tweets-dataset-for-cyberattack-detection.zip"
+dest = "data/tweets-dataset-for-cyberattack-detection"
+
+# RANDOM_STATE: the thesis states no seed; MLC_Notebook defaults to 42.
+# Outputs go under {run_dir}/data so the extracted originals are never overwritten.
+[[notebooks]]
+name = "Train-Test split"
+path = "notebooks/Train-Test split.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["{repo}/data/tweets-dataset-for-cyberattack-detection/tweets_final.csv"]
+outputs = [
+  "{run_dir}/data/filter_train.csv",
+  "{run_dir}/data/filter_test.csv",
+  "{run_dir}/data/categories_train.csv",
+  "{run_dir}/data/categories_test.csv",
+]
+
+
+[notebooks.env]
+ROOT = "{repo}"
+TEST_SIZE = "0.2"
+RANDOM_STATE = "42"
+TWEETS_CSV = "{repo}/data/tweets-dataset-for-cyberattack-detection/tweets_final.csv"
+FILTER_TRAIN_CSV = "{run_dir}/data/filter_train.csv"
+FILTER_TEST_CSV = "{run_dir}/data/filter_test.csv"
+TEMP_CATEGORIES_TRAIN_CSV = "{run_dir}/data/categories_train.csv"
+TEMP_CATEGORIES_TEST_CSV = "{run_dir}/data/categories_test.csv"
+
+[[notebooks]]
+name = "MultiLabelClassification"
+path = "notebooks/MultiLabelClassification.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["data/tweets-dataset-for-cyberattack-detection/sub_tweets_train.pkl"]
+notes = "LOCAL_DIR=Path('./') so cwd is the repo root. Reads data/tweets-dataset-for-cyberattack-detection/sub_tweets_train.pkl, which no step here produces; reports blocked until the human provides it."
+
+[[notebooks]]
+name = "MultiLabelClassificationComputer"
+path = "notebooks/MultiLabelClassificationComputer.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["data/tweets-dataset-for-cyberattack-detection/tweets_train.csv"]
+notes = "LOCAL_DIR=Path('./') so cwd is the repo root. Reads data/tweets-dataset-for-cyberattack-detection/tweets_train.csv, which no step here produces; reports blocked until the human provides it."
+
+[[notebooks]]
+name = "MultiLabelClassificationComputerNetworking"
+path = "notebooks/MultiLabelClassificationComputerNetworking.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["data/tweets-dataset-for-cyberattack-detection/tweets_train.csv"]
+notes = "LOCAL_DIR=Path('./') so cwd is the repo root. Reads data/tweets-dataset-for-cyberattack-detection/tweets_train.csv, which no step here produces; reports blocked until the human provides it."
+
+[[notebooks]]
+name = "MultiLabelClassificationComputerSecurity"
+path = "notebooks/MultiLabelClassificationComputerSecurity.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["data/tweets-dataset-for-cyberattack-detection/tweets_train.csv"]
+notes = "LOCAL_DIR=Path('./') so cwd is the repo root. Reads data/tweets-dataset-for-cyberattack-detection/tweets_train.csv, which no step here produces; reports blocked until the human provides it."
+
+[[notebooks]]
+name = "MultiLabelClassificationHardware"
+path = "notebooks/MultiLabelClassificationHardware.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["data/tweets-dataset-for-cyberattack-detection/tweets_train.csv"]
+notes = "LOCAL_DIR=Path('./') so cwd is the repo root. Reads data/tweets-dataset-for-cyberattack-detection/tweets_train.csv, which no step here produces; reports blocked until the human provides it."
+
+[[notebooks]]
+name = "MultiLabelClassificationOperatingSystems"
+path = "notebooks/MultiLabelClassificationOperatingSystems.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["data/tweets-dataset-for-cyberattack-detection/tweets_train.csv"]
+notes = "LOCAL_DIR=Path('./') so cwd is the repo root. Reads data/tweets-dataset-for-cyberattack-detection/tweets_train.csv, which no step here produces; reports blocked until the human provides it."
+
+[[notebooks]]
+name = "MultiLabelClassificationSoftware"
+path = "notebooks/MultiLabelClassificationSoftware.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = ["data/tweets-dataset-for-cyberattack-detection/tweets_train.csv"]
+notes = "LOCAL_DIR=Path('./') so cwd is the repo root. Reads data/tweets-dataset-for-cyberattack-detection/tweets_train.csv, which no step here produces; reports blocked until the human provides it."
+
+[[notebooks]]
+name = "filter"
+path = "notebooks/filter.ipynb"
+target = "kaggle"
+accelerator = "gpu"
+notes = "Needs env ROOT, CV, RANDOM_STATE, TEST_SIZE, GLOVE_6B_{50,100,200,300}D_PATH, DISTILROBERTA_PATH, SBERT_PATH, ATTACK_BERT_PATH, FILTER_TRAIN_CSV, FILTER_TEST_CSV, FILTER_MODELS, FILTERS_PERFORMANCES_CSV, OPTIMAL_FILTER_PICKLE; COTOV_CSV unavailable (Cotov section blocked). Kaggle paths are finalised in a later package."
+
+[notebooks.env]
+RANDOM_STATE = "42"
+TEST_SIZE = "0.2"
+
+[[notebooks]]
+name = "MLCGeneral"
+path = "notebooks/MLCGeneral.ipynb"
+target = "kaggle"
+accelerator = "gpu"
+inputs = ["data/tweets-dataset/categories_train.csv"]
+notes = "cwd notebooks/ locally (LOCAL_DIR='../'); reads categories_train.csv, GloVe embedders and HF ids. Kaggle paths are finalised in a later package."
+
+[[notebooks]]
+name = "MLCCS"
+path = "notebooks/MLCCS.ipynb"
+target = "kaggle"
+accelerator = "gpu"
+inputs = ["data/tweets-dataset/categories_train.csv"]
+notes = "Same data pattern as MLCGeneral. Kaggle paths are finalised in a later package."
+
+[[notebooks]]
+name = "SystemLabelAssignment"
+path = "notebooks/SystemLabelAssignment.ipynb"
+target = "kaggle"
+accelerator = "gpu"
+inputs = ["models/filter.pkl", "models/general.pkl", "models/fine_grained_computer_security.pkl", "data/tweets-dataset-for-cyberattack-detection/tweets_test.csv"]
+notes = "Anastasia/Cotov section (data/anastasia.csv) is unavailable and reports blocked. Kaggle paths are finalised in a later package."
+
+[[notebooks]]
+name = "MLC_Notebook"
+path = "notebooks/MLC_Notebook.ipynb"
+target = "local"
+cwd = "{repo}"
+blocked = "ONE_STEP_CATEGORIES_TRAIN/TEST_CSV are produced by no notebook; pending human answer"
+
+[[notebooks]]
+name = "MultiLabelClassificationSMOTE"
+path = "notebooks/MultiLabelClassificationSMOTE.ipynb"
+target = "local"
+cwd = "{repo}"
+blocked = "legacy: needs utils.MultiLabelClassifier removed in 16e936a"
