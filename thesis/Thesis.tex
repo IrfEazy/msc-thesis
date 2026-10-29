@@ -1,0 +1,534 @@
+% A LaTeX template for MSc Thesis submissions to 
+% Politecnico di Milano (PoliMi) - School of Industrial and Information Engineering
+%
+% S. Bonetti, A. Gruttadauria, G. Mescolini, A. Zingaro
+% e-mail: template-tesi-ingind@polimi.it
+%
+% Last Revision: October 2021
+%
+% Copyright 2021 Politecnico di Milano, Italy. NC-BY
+
+\documentclass{Configuration_Files/PoliMi3i_thesis}
+
+%------------------------------------------------------------------------------
+%	REQUIRED PACKAGES AND  CONFIGURATIONS
+%------------------------------------------------------------------------------
+
+% CONFIGURATIONS
+\usepackage{parskip} % For paragraph layout
+\usepackage{setspace} % For using single or double spacing
+\usepackage{emptypage} % To insert empty pages
+\usepackage{multicol} % To write in multiple columns (executive summary)
+\setlength\columnsep{15pt} % Column separation in executive summary
+\setlength\parindent{0pt} % Indentation
+\raggedbottom
+
+% PACKAGES FOR TITLES
+\usepackage{titlesec}
+% \titlespacing{\section}{left spacing}{before spacing}{after spacing}
+\titlespacing{\section}{0pt}{3.3ex}{2ex}
+\titlespacing{\subsection}{0pt}{3.3ex}{1.65ex}
+\titlespacing{\subsubsection}{0pt}{3.3ex}{1ex}
+\usepackage{color}
+
+% PACKAGES FOR LANGUAGE AND FONT
+\usepackage[english]{babel} % The document is in English  
+\usepackage[utf8]{inputenc} % UTF8 encoding
+\usepackage[T1]{fontenc} % Font encoding
+\usepackage[11pt]{moresize} % Big fonts
+
+% PACKAGES FOR IMAGES
+\usepackage{graphicx}
+\usepackage{transparent} % Enables transparent images
+\usepackage{eso-pic} % For the background picture on the title page
+\usepackage{subfig} % Numbered and caption subfigures using \subfloat.
+\usepackage{tikz} % A package for high-quality hand-made figures.
+\usetikzlibrary{}
+\graphicspath{{./Images/}} % Directory of the images
+\usepackage{caption} % Coloured captions
+\usepackage{xcolor} % Coloured captions
+\usepackage{amsthm,thmtools,xcolor} % Coloured "Theorem"
+\usepackage{float}
+
+% STANDARD MATH PACKAGES
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{bm}
+\usepackage[overload]{empheq} % For braced-style systems of equations.
+\usepackage{fix-cm} % To override original LaTeX restrictions on sizes
+
+% PACKAGES FOR TABLES
+\usepackage{tabularx}
+\usepackage{longtable} % Tables that can span several pages
+\usepackage{colortbl}
+
+% PACKAGES FOR ALGORITHMS (PSEUDO-CODE)
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% PACKAGES FOR REFERENCES & BIBLIOGRAPHY
+\usepackage[hyphens]{url}
+\usepackage[colorlinks=true,linkcolor=black,anchorcolor=black,citecolor=black,filecolor=black,menucolor=black,runcolor=black,urlcolor=black]{hyperref} % Adds clickable links at references
+\usepackage{cleveref}
+\usepackage[square, numbers, sort&compress]{natbib} % Square brackets, citing references with numbers, citations sorted by appearance in the text and compressed
+\bibliographystyle{abbrvnat} % You may use a different style adapted to your field
+
+% OTHER PACKAGES
+\usepackage{pdfpages} % To include a pdf file
+\usepackage{afterpage}
+\usepackage{lipsum} % DUMMY PACKAGE
+\usepackage{fancyhdr} % For the headers
+\fancyhf{}
+
+% Input of configuration file. Do not change the config.tex file unless you know what you are doing. 
+\input{Configuration_Files/config}
+
+%----------------------------------------------------------------------------
+%	NEW COMMANDS DEFINED
+%----------------------------------------------------------------------------
+
+% EXAMPLES OF NEW COMMANDS
+\newcommand{\bea}{\begin{eqnarray}} % Shortcut for equation arrays
+\newcommand{\eea}{\end{eqnarray}}
+\newcommand{\e}[1]{\times 10^{#1}}  % Powers of 10 notation
+
+%----------------------------------------------------------------------------
+%	ADD YOUR PACKAGES (be careful of package interaction)
+%----------------------------------------------------------------------------
+\usepackage{lscape}
+
+%----------------------------------------------------------------------------
+%	ADD YOUR DEFINITIONS AND COMMANDS (be careful of existing commands)
+%----------------------------------------------------------------------------
+
+%----------------------------------------------------------------------------
+%	BEGIN OF YOUR DOCUMENT
+%----------------------------------------------------------------------------
+
+\begin{document}
+
+\fancypagestyle{plain}{%
+    \fancyhf{} % Clear all header and footer fields
+    \fancyhead[RO,RE]{\thepage} %RO=right odd, RE=right even
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0pt}}
+
+%----------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------
+\pagestyle{empty} % No page numbers
+\frontmatter % Use roman page numbering style (i, ii, iii, iv...) for the preamble pages
+
+\puttitle{
+    title=Multi-Label Classification in the CS-Aware-Next Project: Evaluating ML Algorithms for Cybersecurity Filtering and Classification, % Title of the thesis
+    name=Irfan Cela, % Author Name and Surname
+    course=Computer Science Engineering - Ingegneria Informatica, % Study Programme (in Italian)
+    ID  = 102964,  % Student ID number (numero di matricola)
+    advisor= Prof. Cinzia Cappiello, % Supervisor name
+    coadvisor={Camilla Sancricca}, % Co-Supervisor name, remove this line if there is none
+    academicyear={2023-24},  % Academic Year
+} % These info will be put into your Title page
+
+%----------------------------------------------------------------------------
+%	PREAMBLE PAGES: ABSTRACT (inglese e italiano), EXECUTIVE SUMMARY
+%----------------------------------------------------------------------------
+\startpreamble
+\setcounter{page}{1} % Set page counter to 1
+
+% ABSTRACT IN ENGLISH
+\chapter*{Abstract}
+In the current digital landscape, the rapid evolution of cyber threats necessitates efficient, real-time analysis of online content to support cybersecurity situational awareness and threat intelligence. The CS-Aware-Next project, funded by the European Union, aims to provide organizations with advanced tools for cybersecurity management by leveraging artificial intelligence techniques.
+
+To address this challenge, this research designs and evaluates a classification system that processes cybersecurity-related posts, integrating threat intelligence from social media into cybersecurity workflows. This thesis develops a multi-label classification system within the CS-Aware-Next project to enhance automated cybersecurity filtering and classification using social media data. The study explores different system configurations and assesses their effectiveness in filtering and categorizing cybersecurity-relevant content. Specifically, various machine learning models, including traditional classifiers (Logistic Regression, Naïve Bayes) and ensemble methods (Random Forest, XGBoost), are examined alongside different text representation techniques. The research contrasts static embeddings (GloVe) with context-aware encoders such as DistilRoBERTa, SBERT, and the cybersecurity-specific ATT{\&}CK-BERT model.
+
+The experimental evaluation highlights that context-aware models significantly improve classification accuracy, particularly when combined with ensemble methods, by effectively capturing the semantics of cybersecurity-related text. Despite challenges such as class imbalance and overlapping label semantics, the results demonstrate the potential of AI-driven solutions in improving automated cybersecurity classification.
+
+The findings provide valuable insights for developing AI-powered cybersecurity tools that support more effective threat detection and proactive defense strategies in an increasingly interconnected digital environment.
+\\
+\\
+\textbf{Keywords:} cybersecurity; classification models; context-aware embeddings; threat detection % Keywords
+
+% ABSTRACT IN ITALIAN
+\chapter*{Abstract in lingua italiana}
+Nell'attuale panorama digitale, la rapida evoluzione delle minacce informatiche richiede un'analisi efficiente e in tempo reale dei contenuti online per supportare la consapevolezza della situazione in materia di sicurezza informatica e l'intelligence sulle minacce. Il progetto CS-Aware-Next, finanziato dall'UE, mira a fornire alle organizzazioni strumenti avanzati per la gestione della cybersicurezza sfruttando tecniche di IA.
+
+Per affrontare questa sfida, questa ricerca progetta e valuta un sistema di classificazione che elabora i post relativi alla cybersicurezza, integrando le informazioni sulle minacce dai social media nei flussi di lavoro della cybersicurezza. Questa tesi sviluppa un sistema di classificazione multi-label nell'ambito del progetto CS-Aware-Next per migliorare il filtraggio e la classificazione automatizzati della cybersicurezza utilizzando i dati dei social media. Lo studio esplora diverse configurazioni del sistema e ne valuta l'efficacia nel filtrare e classificare i contenuti rilevanti per la cybersicurezza. In particolare, vengono esaminati diversi modelli di apprendimento automatico, tra cui classificatori tradizionali (Regressione logistica, Naïve Bayes) e metodi ensemble (Random Forest, XGBoost), insieme a diverse tecniche di rappresentazione del testo. La ricerca contrappone embeddings statici (GloVe) a codificatori context-aware come ATT{\&}CK-BERT.
+
+La valutazione sperimentale evidenzia che i modelli context-aware migliorano significativamente l'accuratezza della classificazione, in particolare se combinati con metodi ensemble, catturando efficacemente la semantica del testo relativo alla cybersicurezza. Nonostante sfide come lo sbilanciamento delle classi e la sovrapposizione della semantica delle etichette, i risultati dimostrano il potenziale delle soluzioni guidate dall'IA nel migliorare la classificazione automatizzata della sicurezza informatica.
+
+I risultati forniscono indicazioni preziose per lo sviluppo di strumenti di cybersicurezza basati sull'IA che supportino strategie di rilevamento delle minacce e di difesa proattiva più efficaci in un ambiente digitale sempre più interconnesso.
+\\
+\\
+\textbf{Parole chiave:} cybersicurezza; modelli di classificazione; embedding context-aware; rilevamento delle minacce % Keywords (italian)
+
+%----------------------------------------------------------------------------
+%	LIST OF CONTENTS/FIGURES/TABLES/SYMBOLS
+%----------------------------------------------------------------------------
+
+% TABLE OF CONTENTS
+\thispagestyle{empty}
+\tableofcontents % Table of contents
+\thispagestyle{empty}
+\cleardoublepage
+
+%-------------------------------------------------------------------------
+%	THESIS MAIN TEXT
+%-------------------------------------------------------------------------
+% In the main text of your thesis, you can write the chapters in two different ways:
+%
+%(1) As presented in this template, you can write:
+%    \chapter{Title of the chapter}
+%    *body of the chapter*
+%
+%(2) You can write your chapter in a separate .tex file and then include it in the main file with the following command:
+%    \chapter{Title of the chapter}
+%    \input{chapter_file.tex}
+%
+% Especially for an extended thesis, we recommend the second option.
+
+\addtocontents{toc}{\vspace{2em}} % Add a gap in the Contents, for aesthetics
+\mainmatter % Begin numeric (1,2,3...) page numbering
+
+% --------------------------------------------------------------------------
+% NUMBERED CHAPTERS % Regular chapters following
+% --------------------------------------------------------------------------
+
+\include{Introduction}
+\include{State_of_the_art}
+\include{Methodology}
+\include{Implementation_and_results}
+\include{Conclusions}
+
+% --------------------------------------------------------------------------
+% BIBLIOGRAPHY
+% --------------------------------------------------------------------------
+
+\addtocontents{toc}{\vspace{2em}} % Add a gap in the Contents, for aesthetics
+\bibliography{Thesis_bibliography} % The references information is stored in the file named "Thesis_bibliography.bib."
+
+
+% --------------------------------------------------------------------------
+% APPENDICES
+% --------------------------------------------------------------------------
+
+\cleardoublepage
+\addtocontents{toc}{\vspace{2em}} % Add a gap in the Contents, for aesthetics
+\appendix
+
+
+\chapter{Appendix A}\label{ch:appendix-a}
+\section{Classification System Performance Analysis}\label{sec:classification-system-performance-analysis}
+This appendix comprehensively analyzes various text classification systems implemented in this study. All systems follow a One-Step architecture, which directly categorizes input text into predefined categories. The systems differ in their embedding approaches, with GloVe embeddings of varying dimensions (50D, 100D, 200D, 300D) and SBERT embeddings being evaluated.
+
+\subsection{One-Step GloVe.6B.50D System}
+The One-Step GloVe.6B.50D system utilizes 50-dimensional GloVe word embeddings trained on a corpus of 6 billion tokens. This system achieved an overall accuracy of 58.64{\%} with a hamming loss of 0.084.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|r|rrrrr||}
+        \hline
+                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \hline
+        \textbf{Computer Security}     & 0.93               & 0.37            & 0.53              & 0.67         & 1738             \\
+        \textbf{Hardware}              & 0.96               & 0.35            & 0.51              & 0.67         & 461              \\
+        \textbf{Networking}            & 0.96               & 0.31            & 0.47              & 0.66         & 240              \\
+        \textbf{Operating Systems}     & 0.92               & 0.56            & 0.69              & 0.78         & 156              \\
+        \textbf{Other}                 & 0.53               & 0.98            & 0.69              & 0.70         & 1603             \\
+        \textbf{Software}              & 0.92               & 0.53            & 0.67              & 0.76         & 950              \\
+        \textbf{Antivirus and Malware} & 0.91               & 0.45            & 0.60              & 0.72         & 1110             \\
+        \textbf{Network Security}      & 0.87               & 0.25            & 0.39              & 0.62         & 817              \\
+        \textbf{Linux}                 & 0.96               & 0.65            & 0.78              & 0.82         & 77               \\
+        \textbf{MacOS}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
+        \textbf{Unix}                  & 0.90               & 0.64            & 0.75              & 0.82         & 14               \\
+        \textbf{Windows}               & 0.84               & 0.46            & 0.59              & 0.73         & 46               \\
+        \textbf{Databases}             & 0.85               & 0.63            & 0.72              & 0.81         & 342              \\
+        \textbf{Computer}              & 0.90               & 0.36            & 0.51              & 0.68         & 362              \\
+        \textbf{Computer Components}   & 0.92               & 0.32            & 0.47              & 0.66         & 38               \\
+        \textbf{Computer Networking}   & 1.00               & 0.34            & 0.51              & 0.67         & 38               \\
+        \hline
+        \hline
+        \textbf{Micro Avg}             & 0.72               & 0.52            & 0.61              & 0.75         & 8005             \\
+        \textbf{Macro Avg}             & 0.90               & 0.48            & 0.59              & 0.72         & 8005             \\
+        \textbf{Weighted Avg}          & 0.84               & 0.52            & 0.58              & 0.70         & 8005             \\
+        \textbf{Samples Avg}           & 0.63               & 0.62            & 0.62              & 0.79         & 8005             \\
+        \hline
+        \multicolumn{6}{l}{\textbf{Accuracy:} 58.64\%}                                                                              \\
+        \multicolumn{6}{l}{\textbf{Hamming Loss:} 0.084}                                                                            \\
+        \hline
+        \hline
+    \end{tabular}
+    \caption{\textbf{One-Step GloVe.6B.50D System Performances}.}
+\end{table}
+
+\subsubsection*{Strengths}
+\begin{itemize}
+    \item High precision across most categories (average precision of 0.90)
+    \item Particularly strong precision for specialized categories like ``\texttt{Computer Networking}'' (1.00) and ``\texttt{MacOS}'' (1.00)
+    \item Good performance on ``\texttt{Operating Systems}'' (F1-Score: 0.69) and ``\texttt{Linux}'' (F1-Score: 0.78)
+\end{itemize}
+
+\subsubsection*{Weaknesses}
+\begin{itemize}
+    \item Generally low recall across most categories (average recall of 0.48)
+    \item Poor performance on ``\texttt{Network Security}'' (F1-Score: 0.39)
+    \item Significant imbalance between precision and recall for ``\texttt{Computer Security}'' (0.93 vs 0.37)
+\end{itemize}
+
+\subsection{One-Step GloVe.6B.100D System}
+The One-Step GloVe.6B.100D system employs 100-dimensional GloVe word embeddings. This system achieved an overall accuracy of 57.95{\%} with a hamming loss of 0.085.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|r|rrrrr||}
+        \hline
+                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \hline
+        \textbf{Computer Security}     & 0.94               & 0.34            & 0.50              & 0.66         & 1738             \\
+        \textbf{Hardware}              & 0.96               & 0.35            & 0.51              & 0.67         & 461              \\
+        \textbf{Networking}            & 0.96               & 0.31            & 0.47              & 0.65         & 240              \\
+        \textbf{Operating Systems}     & 0.93               & 0.54            & 0.69              & 0.77         & 156              \\
+        \textbf{Other}                 & 0.52               & 0.99            & 0.68              & 0.70         & 1603             \\
+        \textbf{Software}              & 0.92               & 0.54            & 0.68              & 0.76         & 950              \\
+        \textbf{Antivirus and Malware} & 0.92               & 0.41            & 0.56              & 0.70         & 1110             \\
+        \textbf{Network Security}      & 0.88               & 0.25            & 0.38              & 0.62         & 817              \\
+        \textbf{Linux}                 & 0.96               & 0.62            & 0.76              & 0.81         & 77               \\
+        \textbf{MacOS}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
+        \textbf{Unix}                  & 0.90               & 0.64            & 0.75              & 0.82         & 14               \\
+        \textbf{Windows}               & 0.87               & 0.43            & 0.58              & 0.72         & 46               \\
+        \textbf{Databases}             & 0.87               & 0.63            & 0.73              & 0.81         & 342              \\
+        \textbf{Computer}              & 0.91               & 0.36            & 0.52              & 0.68         & 362              \\
+        \textbf{Computer Components}   & 0.92               & 0.32            & 0.47              & 0.66         & 38               \\
+        \textbf{Computer Networking}   & 1.00               & 0.37            & 0.54              & 0.68         & 38               \\
+        \hline
+        \hline
+        \textbf{Micro Avg}             & 0.71               & 0.51            & 0.60              & 0.74         & 8005             \\
+        \textbf{Macro Avg}             & 0.90               & 0.47            & 0.59              & 0.72         & 8005             \\
+        \textbf{Weighted Avg}          & 0.84               & 0.51            & 0.57              & 0.69         & 8005             \\
+        \textbf{Samples Avg}           & 0.62               & 0.61            & 0.61              & 0.79         & 8005             \\
+        \hline
+        \multicolumn{6}{l}{\textbf{Accuracy:} 57.95\%}                                                                              \\
+        \multicolumn{6}{l}{\textbf{Hamming Loss:} 0.085}                                                                            \\
+        \hline
+        \hline
+    \end{tabular}
+    \caption{\textbf{One-Step GloVe.6B.100D System Performances}.}
+\end{table}
+
+\subsubsection*{Strengths}
+\begin{itemize}
+    \item Maintains high precision across categories (macro average: 0.90)
+    \item Perfect precision for ``\texttt{MacOS}'' and ``\texttt{Computer Networking}'' categories
+    \item Strong performance on ``\texttt{Unix}'' (F1-Score: 0.75) and ``\texttt{Databases}'' (F1-Score: 0.73)
+\end{itemize}
+
+\subsubsection*{Weaknesses}
+\begin{itemize}
+    \item Slight performance decrease compared to the 50D model (accuracy dropped by 0.69{\%})
+    \item Continued issues with low recall, particularly for ``\texttt{Network Security}'' (0.25)
+    \item The ``\texttt{Other}'' category shows significant precision-recall imbalance (0.52 vs 0.99)
+\end{itemize}
+
+\subsection{One-Step GloVe.6B.200D System}
+The One-Step GloVe.6B.200D system uses 200-dimensional GloVe word embeddings. This system achieved an overall accuracy of 58.57{\%} with a hamming loss of 0.084.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|r|rrrrr||}
+        \hline
+                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \hline
+        \textbf{Computer Security}     & 0.94               & 0.36            & 0.52              & 0.67         & 1738             \\
+        \textbf{Hardware}              & 0.96               & 0.34            & 0.51              & 0.67         & 461              \\
+        \textbf{Networking}            & 0.93               & 0.32            & 0.47              & 0.66         & 240              \\
+        \textbf{Operating Systems}     & 0.92               & 0.56            & 0.70              & 0.78         & 156              \\
+        \textbf{Other}                 & 0.52               & 0.99            & 0.68              & 0.70         & 1603             \\
+        \textbf{Software}              & 0.94               & 0.54            & 0.69              & 0.76         & 950              \\
+        \textbf{Antivirus and Malware} & 0.92               & 0.43            & 0.59              & 0.71         & 1110             \\
+        \textbf{Network Security}      & 0.86               & 0.25            & 0.38              & 0.62         & 817              \\
+        \textbf{Linux}                 & 0.91               & 0.66            & 0.77              & 0.83         & 77               \\
+        \textbf{MacOS}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
+        \textbf{Unix}                  & 0.82               & 0.64            & 0.72              & 0.82         & 14               \\
+        \textbf{Windows}               & 0.87               & 0.43            & 0.58              & 0.72         & 46               \\
+        \textbf{Databases}             & 0.85               & 0.64            & 0.73              & 0.82         & 342              \\
+        \textbf{Computer}              & 0.91               & 0.35            & 0.51              & 0.68         & 362              \\
+        \textbf{Computer Components}   & 0.92               & 0.32            & 0.47              & 0.66         & 38               \\
+        \textbf{Computer Networking}   & 1.00               & 0.34            & 0.51              & 0.67         & 38               \\
+        \hline
+        \hline
+        \textbf{Micro Avg}             & 0.71               & 0.52            & 0.60              & 0.75         & 8005             \\
+        \textbf{Macro Avg}             & 0.89               & 0.48            & 0.59              & 0.72         & 8005             \\
+        \textbf{Weighted Avg}          & 0.84               & 0.52            & 0.58              & 0.70         & 8005             \\
+        \textbf{Samples Avg}           & 0.62               & 0.62            & 0.62              & 0.79         & 8005             \\
+        \hline
+        \multicolumn{6}{l}{\textbf{Accuracy:} 58.57\%}                                                                              \\
+        \multicolumn{6}{l}{\textbf{Hamming Loss:} 0.084}                                                                            \\
+        \hline
+        \hline
+    \end{tabular}
+    \caption{\textbf{One-Step GloVe.6B.200D System Performances}.}
+\end{table}
+
+\subsubsection*{Strengths}
+\begin{itemize}
+    \item Improved performance on ``\texttt{Software}'' category (F1-Score: 0.69) compared to previous models
+    \item Strong performance on ``\texttt{Linux}'' (F1-Score: 0.77) and ``\texttt{Databases}'' (F1-Score: 0.73)
+    \item Better micro-average recall (0.52) than the 100D model
+\end{itemize}
+
+\subsubsection*{Weaknesses}
+\begin{itemize}
+    \item Still struggles with ``\texttt{Network Security}'' (F1-Score: 0.38)
+    \item Limited improvement in overall metrics despite increased embedding dimensions
+    \item Consistent recall challenges across most technical categories
+\end{itemize}
+
+\subsection{One-Step GloVe.6B.300D System}
+The One-Step GloVe.6B.300D system implements 300-dimensional GloVe word embeddings. This system achieved an overall accuracy of 58.74{\%} with a hamming loss of 0.083.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|r|rrrrr||}
+        \hline
+                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \hline
+        \textbf{Computer Security}     & 0.94               & 0.37            & 0.53              & 0.68         & 1738             \\
+        \textbf{Hardware}              & 0.97               & 0.36            & 0.52              & 0.68         & 461              \\
+        \textbf{Networking}            & 0.95               & 0.33            & 0.48              & 0.66         & 240              \\
+        \textbf{Operating Systems}     & 0.94               & 0.54            & 0.69              & 0.77         & 156              \\
+        \textbf{Other}                 & 0.53               & 0.98            & 0.69              & 0.71         & 1603             \\
+        \textbf{Software}              & 0.93               & 0.54            & 0.68              & 0.76         & 950              \\
+        \textbf{Antivirus and Malware} & 0.92               & 0.45            & 0.60              & 0.72         & 1110             \\
+        \textbf{Network Security}      & 0.88               & 0.25            & 0.39              & 0.62         & 817              \\
+        \textbf{Linux}                 & 0.98               & 0.64            & 0.77              & 0.82         & 77               \\
+        \textbf{MacOs}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
+        \textbf{Unix}                  & 0.82               & 0.64            & 0.72              & 0.82         & 14               \\
+        \textbf{Windows}               & 0.86               & 0.41            & 0.56              & 0.71         & 46               \\
+        \textbf{Databases}             & 0.87               & 0.65            & 0.74              & 0.82         & 342              \\
+        \textbf{Computer}              & 0.91               & 0.38            & 0.53              & 0.69         & 362              \\
+        \textbf{Computer Components}   & 0.86               & 0.32            & 0.46              & 0.66         & 38               \\
+        \textbf{Computer Networking}   & 0.93               & 0.37            & 0.53              & 0.68         & 38               \\
+        \hline
+        \hline
+        \textbf{Micro Avg}             & 0.72               & 0.53            & 0.61              & 0.75         & 8005             \\
+        \textbf{Macro Avg}             & 0.89               & 0.48            & 0.60              & 0.72         & 8005             \\
+        \textbf{Weighted Avg}          & 0.84               & 0.53            & 0.59              & 0.70         & 8005             \\
+        \textbf{Samples Avg}           & 0.63               & 0.62            & 0.62              & 0.80         & 8005             \\
+        \hline
+        \multicolumn{6}{l}{Accuracy: 58.74\%}                                                                                       \\
+        \multicolumn{6}{l}{Hamming Loss: 0.083}                                                                                     \\
+        \hline
+        \hline
+    \end{tabular}
+    \caption{\textbf{One-Step GloVe.6B.300D System Performances}.}
+\end{table}
+
+\subsubsection*{Strengths}
+\begin{itemize}
+    \item Highest accuracy among GloVe embedding models
+    \item Improved performance on ``\texttt{Databases}'' (F1-Score: 0.74)
+    \item Best overall precision-recall balance among GloVe models
+\end{itemize}
+
+\subsubsection*{Weaknesses}
+\begin{itemize}
+    \item Still shows significant weaknesses in ``\texttt{Network Security}'' classification
+    \item Limited gains from increased dimensionality
+    \item MacOS and specialty categories continue to have low recall despite high precision
+\end{itemize}
+
+\subsection{One-Step SBERT System}
+The One-Step SBERT system utilizes Sentence-BERT embeddings, contextual embeddings that capture semantic meaning at the sentence level. This system achieved an overall accuracy of 59.40{\%} with a hamming loss of 0.082.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|r|rrrrr||}
+        \hline
+                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \hline
+        \textbf{Computer Security}     & 0.92               & 0.41            & 0.57              & 0.69         & 1738             \\
+        \textbf{Hardware}              & 0.99               & 0.35            & 0.52              & 0.68         & 461              \\
+        \textbf{Networking}            & 0.95               & 0.31            & 0.47              & 0.65         & 240              \\
+        \textbf{Operating Systems}     & 0.93               & 0.54            & 0.69              & 0.77         & 156              \\
+        \textbf{Other}                 & 0.53               & 0.98            & 0.69              & 0.71         & 1603             \\
+        \textbf{Software}              & 0.92               & 0.53            & 0.67              & 0.76         & 950              \\
+        \textbf{Antivirus and Malware} & 0.88               & 0.49            & 0.63              & 0.73         & 1110             \\
+        \textbf{Network Security}      & 0.85               & 0.27            & 0.41              & 0.63         & 817              \\
+        \textbf{Linux}                 & 0.96               & 0.62            & 0.76              & 0.81         & 77               \\
+        \textbf{MacOs}                 & 1.00               & 0.38            & 0.56              & 0.69         & 13               \\
+        \textbf{Unix}                  & 0.82               & 0.64            & 0.72              & 0.82         & 14               \\
+        \textbf{Windows}               & 0.85               & 0.48            & 0.61              & 0.74         & 46               \\
+        \textbf{Databases}             & 0.86               & 0.63            & 0.73              & 0.81         & 342              \\
+        \textbf{Computer}              & 0.92               & 0.36            & 0.52              & 0.68         & 362              \\
+        \textbf{Computer Components}   & 1.00               & 0.37            & 0.54              & 0.68         & 38               \\
+        \textbf{Computer Networking}   & 1.00               & 0.42            & 0.59              & 0.71         & 38               \\
+        \hline
+        \hline
+        \textbf{Micro Avg}             & 0.72               & 0.54            & 0.62              & 0.76         & 8005             \\
+        \textbf{Macro Avg}             & 0.90               & 0.49            & 0.60              & 0.72         & 8005             \\
+        \textbf{Weighted Avg}          & 0.83               & 0.54            & 0.60              & 0.71         & 8005             \\
+        \textbf{Samples Avg}           & 0.64               & 0.63            & 0.63              & 0.80         & 8005             \\
+        \hline
+        \multicolumn{6}{l}{Accuracy: 59.40\%}                                                                                       \\
+        \multicolumn{6}{l}{Hamming Loss: 0.082}                                                                                     \\
+        \hline
+        \hline
+    \end{tabular}
+    \caption{\textbf{One-Step SBERT System Performances}.}
+\end{table}
+
+\subsubsection*{Strengths}
+\begin{itemize}
+    \item Best overall performance among all tested systems
+    \item Highest F1-scores for critical categories like ``\texttt{Antivirus and Malware}'' (0.63)
+    \item Improved recall for ``\texttt{Network Security}'' (0.27) and ``\texttt{Windows}'' (0.48)
+    \item Perfect precision (1.00) for ``\texttt{Computer Components}'', ``\texttt{Computer Networking}'', and ``\texttt{MacOS}''
+    \item Best micro-average recall (0.54) and F1-score (0.62) among all models
+\end{itemize}
+
+\subsubsection*{Weaknesses}
+\begin{itemize}
+    \item Still shows precision-recall imbalance across most categories
+    \item The ``\texttt{Other}'' category continues to have low precision (0.53) but very high recall (0.98)
+\end{itemize}
+
+\subsection{Comparative Analysis}
+When comparing all five systems, several patterns emerge:
+
+\begin{enumerate}
+    \item \textbf{Dimensional Scaling Effects}. Increasing the dimensionality of GloVe embeddings from 50D to 300D showed modest improvements (58.64{\%} to 58.74{\%} accuracy), suggesting diminishing returns from simply adding more dimensions.
+    \item \textbf{Embedding Quality vs.\ Dimensionality}. Despite potentially lower dimensionality, the SBERT system outperformed all GloVe models, highlighting that embeddings' quality and contextual nature can be more important than raw dimensionality.
+    \item \textbf{Category-Specific Performance}. All systems performed well on ``\texttt{Linux}'' and ``\texttt{Databases}'' categories, suggesting these topics are well-represented in the training data. Conversely, ``\texttt{Network Security}'' consistently posed challenges across all models, indicating a need for more diverse and representative training examples. Additionally, specialized categories like ``\texttt{MacOS}'' and ``\texttt{Unix}'' showed high precision but limited recall across all models.
+    \item \textbf{Precision-Recall Trade-offs}. Every system demonstrated a significant imbalance between precision and recall, with precision consistently higher. This suggests the models are conservative in their predictions, preferring to avoid false positives at the expense of more false negatives.
+    \item \textbf{Best Overall Performance}. The One-Step SBERT System demonstrated the best overall performance metrics, with the highest accuracy (59.40{\%}), lowest hamming loss (0.082), and best micro-averaged F1-score (0.62).
+\end{enumerate}
+
+In conclusion, while all systems demonstrated reasonable performance for technical text classification, the SBERT embeddings provided the most balanced and effective approach. Future work might address the precision-recall imbalance, particularly for specialized technical categories with limited training examples.
+
+%\chapter{Appendix B}\label{ch:mlcclasses}
+
+
+% LIST OF FIGURES
+\listoffigures
+
+% LIST OF TABLES
+\listoftables
+
+% LIST OF SYMBOLS
+% Write out the List of Symbols on this page
+%    \chapter*{List of Symbols} % You have to include a chapter for your list of symbols (
+%    \begin{table}[H]
+%        \centering
+%        \begin{tabular}{lll}
+%            \textbf{Variable} & \textbf{Description} & \textbf{SI unit} \\\hline\\[-9px]
+%            $\bm{u}$        & solid displacement   & m \\[2px]
+%            $\bm{u}_f$        & fluid displacement   & m \\[2px]
+%        \end{tabular}
+%    \end{table}
+
+% ACKNOWLEDGEMENTS
+
+\cleardoublepage
+
+\end{document}
