@@ -15,4 +15,4 @@ From the repo root (no shell-escape):
     latexmk -cd -pdf -interaction=nonstopmode -halt-on-error thesis/Thesis.tex
 
 - The PDF and LaTeX auxiliary files are written next to the sources and are gitignored (`thesis/.gitignore`); do not commit them.
-- Results and statistics quoted in `Implementation_and_results.tex` must stay aligned with the experiment outputs in the repo (`notebooks/`, `MLC/`).
+- Results and statistics quoted in `Implementation_and_results.tex` must stay aligned with the experiment outputs produced by `notebooks/` and `MLC/` (written to local-only `data/` and `models/`).
