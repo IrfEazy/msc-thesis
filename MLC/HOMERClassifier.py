@@ -1,11 +1,10 @@
-from typing import cast, List, Optional, TypeVar
+from typing import List, Optional
 
 import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LogisticRegression
-from sklearn.multioutput import MultiOutputClassifier
 
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
@@ -21,9 +20,17 @@ class Node:
         ----------
         labels : List[int]
             The indices of the labels represented by this node.
+
+        Attributes
+        ----------
+        children : List[Node]
+            Child nodes, whose label sets partition `labels`.
+        models : list
+            One entry per child: a fitted binary classifier of the child's
+            meta-label, or a constant probability (float).
         """
         self.labels = labels
-        self.clf = None
+        self.models = []
         self.children = []
         self.is_leaf = False
 
@@ -42,7 +49,7 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         Parameters
         ----------
         base_estimator : ClassifierMixin
-            The base classifier to use at each node.
+            The base classifier cloned for each meta-label model.
         n_clusters : int
             The maximum number of clusters to use for label set splitting.
         threshold : float
@@ -63,7 +70,7 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
     @check_binary_matrices("Y")
     def fit(self, X: ArrayLike, Y: ArrayLike) -> "HOMERClassifier":
         """
-        Build the label hierarchy and train a classifier at each node.
+        Build the label hierarchy and train the child meta-label models of each node.
 
         Parameters
         ----------
@@ -81,14 +88,105 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         self.X_ = X
         self.n_labels_ = self.Y_.shape[1]
         # Build the tree starting from the full label set.
-        self.root = self._build_tree(X, self.Y_, list(range(self.n_labels_)))
+        self.root = self._build_tree(X, self.Y_, list(range(self.n_labels_)), True)
         return self
 
-    @check_same_rows("X", "Y")
-    @check_binary_matrices("Y")
-    def _build_tree(self, X: ArrayLike, Y: ArrayLike, label_indices: List[int]) -> Node:
+    def _fit_meta_model(self, X: ArrayLike, mu: ArrayLike):
+        """
+        Fit a binary model for a meta-label, or return a constant probability.
+
+        Parameters
+        ----------
+        X : ArrayLike of shape (n_subset, n_features)
+            Training samples of the node.
+        mu : ArrayLike of shape (n_subset,)
+            Binary meta-label values.
+
+        Returns
+        -------
+        model : float or fitted estimator
+            0.0 for an empty subset or an all-zero meta-label, 1.0 for an
+            all-one meta-label, otherwise a fitted clone of the base estimator.
+        """
+        if mu.shape[0] == 0 or not mu.any():
+            return 0.0
+        if mu.all():
+            return 1.0
+        return clone(self.base_estimator).fit(X, mu)
+
+    @staticmethod
+    def _model_proba(model, x: ArrayLike) -> float:
+        """
+        Probability of the positive meta-label for a single instance.
+
+        Parameters
+        ----------
+        model : float or fitted estimator
+            A constant probability or a fitted binary classifier.
+        x : ArrayLike of shape (1, n_features)
+            The input feature vector.
+
+        Returns
+        -------
+        p : float
+            Probability of class 1.
+        """
+        if isinstance(model, float):
+            return model
+        column = list(model.classes_).index(1)
+        return float(model.predict_proba(x)[0][column])
+
+    def _split_labels(self, Y: ArrayLike, label_indices: List[int]) -> List[List[int]]:
+        """
+        Partition a label set into child label sets.
+
+        Parameters
+        ----------
+        Y : ArrayLike of shape (n_samples, n_labels)
+            Binary label matrix.
+        label_indices : List[int]
+            The indices of the labels to split (at least two).
+
+        Returns
+        -------
+        groups : List[List[int]]
+            Non-empty, disjoint groups covering label_indices.
+        """
+        n_labels_node = len(label_indices)
+        n_clusters = min(self.n_clusters, n_labels_node)
+        if n_labels_node == n_clusters:
+            return [[lbl] for lbl in label_indices]
+        # Represent each label by its column vector (over all training samples)
+        # and cluster them into n_clusters groups.
+        label_matrix = Y[:, label_indices].T
+        kmeans = KMeans(n_clusters=n_clusters, random_state=self.random_state)
+        clusters = kmeans.fit_predict(label_matrix)
+        groups = [
+            [label_indices[i] for i in range(n_labels_node) if clusters[i] == cl]
+            for cl in numpy.unique(clusters)
+        ]
+        if len(groups) < 2:
+            # Degenerate clustering (e.g. identical columns): even contiguous split.
+            groups = [
+                [label_indices[i] for i in part]
+                for part in numpy.array_split(numpy.arange(n_labels_node), n_clusters)
+            ]
+        return groups
+
+    def _build_tree(
+        self,
+        X: ArrayLike,
+        Y: ArrayLike,
+        label_indices: List[int],
+        is_root: bool = False,
+    ) -> Node:
         """
         Recursively build the hierarchy.
+
+        Each internal node trains one binary model per child on the child's
+        meta-label (the OR of Y over the child's labels), using the samples
+        with at least one positive label in the node (all samples at the root).
+        Leaf nodes train no model.
 
         Parameters
         ----------
@@ -98,6 +196,8 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
             Binary label matrix.
         label_indices : List[int]
             The indices of the labels to consider for this node.
+        is_root : bool
+            Whether the node is the root (trained on all samples).
 
         Returns
         -------
@@ -105,51 +205,25 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
             The node representing the current label set.
         """
         node = Node(label_indices)
-        # Select samples having at least one positive label among those in this node.
-        mask = numpy.any(Y[:, label_indices] == 1, axis=1)
-        X_sub = numpy.array(X[mask])
-        Y_sub = numpy.array(Y[mask][:, label_indices])
-        T = TypeVar("T", bound=ClassifierMixin)
-
-        # Train a classifier for this node if there are samples.
-        if X_sub.shape[0] > 0:
-            if len(label_indices) == 1:
-                clf: T = cast(T, clone(self.base_estimator))
-                clf.fit(X_sub, Y_sub.ravel())
-                node.clf = clf
-            else:
-                clf = MultiOutputClassifier(clone(self.base_estimator))
-                clf.fit(X_sub, Y_sub)
-                node.clf = clf
-        else:
-            node.clf = None
-
-        # If only one label is present, mark as leaf.
-        if len(label_indices) == 1:
+        if len(label_indices) == 1 and not is_root:
             node.is_leaf = True
             return node
 
-        # Otherwise, split the label set using clustering.
-        n_labels_node = len(label_indices)
-        n_clusters = min(self.n_clusters, n_labels_node)
-        if n_labels_node == n_clusters:
-            # Each label becomes its own child.
-            for lbl in label_indices:
-                child = self._build_tree(X, Y, [lbl])
-                node.children.append(child)
+        if is_root:
+            mask = numpy.ones(Y.shape[0], dtype=bool)
         else:
-            # Represent each label by its column vector (over all training samples)
-            # and cluster them into n_clusters groups.
-            label_matrix = Y[:, label_indices].T
-            kmeans = KMeans(n_clusters=n_clusters, random_state=self.random_state)
-            clusters = kmeans.fit_predict(label_matrix)
-            for cl in numpy.unique(clusters):
-                child_labels = [
-                    label_indices[i] for i in range(n_labels_node) if clusters[i] == cl
-                ]
-                child = self._build_tree(X, Y, child_labels)
-                node.children.append(child)
-        node.is_leaf = False
+            mask = numpy.any(Y[:, label_indices] == 1, axis=1)
+        X_sub = numpy.array(X)[mask]
+        Y_sub = Y[mask]
+
+        if len(label_indices) == 1:
+            groups = [list(label_indices)]
+        else:
+            groups = self._split_labels(Y, label_indices)
+        for group in groups:
+            mu = numpy.any(Y_sub[:, group] == 1, axis=1).astype(int)
+            node.models.append(self._fit_meta_model(X_sub, mu))
+            node.children.append(self._build_tree(X, Y, group))
         return node
 
     def _traverse_predict(self, x: ArrayLike, node: Node) -> ArrayLike:
@@ -167,31 +241,20 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         -------
         prob : ArrayLike of shape (n_labels,)
             Predicted probabilities for each label in the global label space.
+            A label has the probability of its leaf at its parent if the
+            traversal reached it, otherwise 0.0.
         """
         prob = numpy.zeros(self.n_labels_)
-
-        # Get this node's prediction (if a classifier was trained).
-        if node.clf is not None:
-            x_reshaped = x.reshape(1, -1)
-            if len(node.labels) == 1:
-                # For a single-label node, obtain probability for positive class.
-                p = node.clf.predict_proba(x_reshaped)[0][0]
-                prob[node.labels[0]] = p
+        x_reshaped = x.reshape(1, -1)
+        for child, model in zip(node.children, node.models):
+            p = self._model_proba(model, x_reshaped)
+            if p < self.threshold:
+                continue
+            if child.is_leaf:
+                prob[child.labels[0]] = p
             else:
-                # For a multi-label node, node.clf is a MultiOutputClassifier.
-                probabilities_list = node.clf.predict_proba(x_reshaped)
-                for i, lbl in enumerate(node.labels):
-                    p = probabilities_list[i][0][1]
-                    prob[lbl] = p
-
-        # Traverse children if available.
-        if not node.is_leaf and node.children:
-            for child in node.children:
-                # Proceed to child if any label in its set has a probability above the threshold.
-                if any(prob[lbl] >= self.threshold for lbl in child.labels):
-                    child_prob = self._traverse_predict(x, child)
-                    # Combine probabilities by taking the maximum value.
-                    prob = numpy.maximum(prob, child_prob)
+                # Child label sets are disjoint, so the results do not overlap.
+                prob = numpy.maximum(prob, self._traverse_predict(x, child))
         return prob
 
     def predict_proba(self, X: ArrayLike) -> ArrayLike:
@@ -218,7 +281,7 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         """
         Predict binary labels for each instance.
 
-        A label is predicted as relevant if its predicted probability exceeds the threshold.
+        A label is predicted as relevant if its predicted probability is at least the threshold.
 
         Parameters
         ----------
