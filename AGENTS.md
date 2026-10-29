@@ -17,7 +17,7 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 ## Environment
 - Managed with uv (`pyproject.toml`, `uv.lock`, `.python-version` 3.12; `.venv` is ignored). Set up with `uv sync`, run with `uv run ...` (e.g. `uv run jupyter nbconvert --to notebook --execute <nb>.ipynb`), add packages with `uv add` (`uv add --dev` for tooling). `MLC` is not installed as a package; its own dependencies are in `MLC/AGENTS.md`.
 - Local dev uses the CPU torch pin (`[[tool.uv.index]] pytorch-cpu`, `[tool.uv.sources]` in `pyproject.toml`).
-- GPU experiments run on Kaggle without `uv sync` (it would replace the image's CUDA stack): upload the repo code, then `pip install -r requirements-kaggle.txt`. That file is exported from `uv.lock` without the packages listed in `[tool.kaggle-export] preinstalled` (`pyproject.toml`) or the dependencies only they need (`uv export --prune`); regenerate it with `uv run python scripts/export_kaggle_requirements.py` after changing dependencies or that list. Pinned transitive constraints may still upgrade image packages, so check the pip output and installed versions.
+- GPU experiments run on Kaggle without `uv sync` (it would replace the image's CUDA stack): `scripts/kaggle_bundle.py` generates the bundles (see Kaggle bundles); the bootstrap installs `requirements-kaggle.txt`. That file is exported from `uv.lock` without the packages listed in `[tool.kaggle-export] preinstalled` (`pyproject.toml`) or the dependencies only they need (`uv export --prune`); regenerate it with `uv run python scripts/export_kaggle_requirements.py` after changing dependencies or that list. Pinned transitive constraints may still upgrade image packages, so check the pip output and installed versions.
 - `device.py` `select_device()` picks the XGBoost device from env `COMPUTE_DEVICE` (`auto` default, `cpu`, `cuda`; `cuda` without CUDA raises); `auto` uses CUDA only if torch sees a GPU.
 - Root modules import nltk, sentence-transformers, xgboost, pandas (`utils.py`), emoji and pydot (`preprocess_functions.py`). They call `nltk.download` at import (network access).
 - No tests, lint or CI config exist for the code itself.
@@ -38,3 +38,9 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 
 ## Working with notebooks and data
 - Never read or dump whole notebooks (`.ipynb` JSON with outputs) or data files; grep cells or read targeted ranges. Notebook editing rules: `notebooks/AGENTS.md`.
+
+## Kaggle bundles
+- `[kaggle]` and each Kaggle notebook's `[notebooks.kaggle]` subtable in `experiments.toml` declare datasets, kernels, cwd, env, links and output dirs; `scripts/kaggle_bundle.py` executes them generically.
+- Workflow: `build` (writes `build/kaggle/`, gitignored) -> `push --smoke` -> `status` / `fetch` (outputs to `runs/kaggle/<slug>/`) -> full `push`. `push --dry-run` prints the Kaggle CLI commands only.
+- The data dataset needs `runs/splits/data` from `run_notebooks.py --only 'Train-Test split' --out runs/splits`.
+- Credentials come from the user's local Kaggle CLI config; never commit or print them.
