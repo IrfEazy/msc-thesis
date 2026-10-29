@@ -17,6 +17,9 @@ code_dataset = "msc-thesis-code"
 data_dataset = "msc-thesis-data"
 accelerator = "NvidiaTeslaT4"  # passed as `kaggle kernels push --accelerator`
 build_dir = "build/kaggle"
+code_license = "CC0-1.0"  # repo is Unlicense
+data_license = "unknown"
+dataset_ready_timeout = 900  # seconds to wait for each pushed dataset to become ready
 # Repo paths copied into the code dataset (directories: only *.py files).
 code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "requirements-kaggle.txt"]
 # Copied into the data dataset.
@@ -171,7 +174,7 @@ path = "notebooks/MLCGeneral.ipynb"
 target = "kaggle"
 accelerator = "gpu"
 inputs = ["data/tweets-dataset/categories_train.csv"]
-notes = "cwd notebooks/ locally (LOCAL_DIR='../'); the Kaggle bootstrap blocks kaggle_secrets so the local branch runs, and links data/ and embedders/ to the attached datasets."
+notes = "cwd notebooks/ locally (LOCAL_DIR='../'); the Kaggle bootstrap blocks google.colab and kaggle_secrets so the local branch runs, and links data/ and embedders/ to the attached datasets."
 
 [notebooks.kaggle]
 slug = "msc-thesis-mlcgeneral"
@@ -180,7 +183,7 @@ accelerator = "gpu"
 internet = true
 cwd = "{repo}/notebooks"
 outputs_dirs = ["models", "models/general", "models/dictionaries", "models/computer security"]
-block_imports = ["kaggle_secrets"]
+block_imports = ["google.colab", "kaggle_secrets"]
 
 [notebooks.kaggle.links]
 "data/tweets-dataset" = "{input:msc-thesis-data}/tweets-dataset"
@@ -201,7 +204,7 @@ accelerator = "gpu"
 internet = true
 cwd = "{repo}/notebooks"
 outputs_dirs = ["models", "models/general", "models/dictionaries", "models/computer security"]
-block_imports = ["kaggle_secrets"]
+block_imports = ["google.colab", "kaggle_secrets"]
 
 [notebooks.kaggle.links]
 "data/tweets-dataset" = "{input:msc-thesis-data}/tweets-dataset"

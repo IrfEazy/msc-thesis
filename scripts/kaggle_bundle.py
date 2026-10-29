@@ -16,6 +16,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -37,8 +38,13 @@ from pathlib import Path
 INPUT_ROOT = Path(os.environ.get("KAGGLE_INPUT_ROOT", "/kaggle/input"))
 WORKING_ROOT = Path(os.environ.get("KAGGLE_WORKING_ROOT", "/kaggle/working"))
 TMP_ROOT = Path(os.environ.get("KAGGLE_TMP_ROOT", "/kaggle/tmp"))
-if not TMP_ROOT.parent.exists():
-    TMP_ROOT = Path("/tmp")
+try:
+    TMP_ROOT.mkdir(parents=True, exist_ok=True)
+    print("tmp root:", TMP_ROOT)
+except OSError as exc:
+    import tempfile
+    TMP_ROOT = Path(tempfile.gettempdir())
+    print(f"tmp root: {TMP_ROOT} (fallback; configured root unusable: {exc})")
 REPO_DIR = TMP_ROOT / "msc-thesis"
 
 
@@ -100,7 +106,7 @@ for p in (str(REPO_DIR),):
 os.chdir(CWD)
 
 for name in CFG["block_imports"]:
-    sys.modules[name] = None
+    sys.modules[name] = None  # also works for dotted names such as google.colab
     try:
         importlib.import_module(name)
     except ImportError:
@@ -212,8 +218,8 @@ def write_json(path, obj):
     path.write_text(json.dumps(obj, indent=2) + "\n")
 
 
-def dataset_meta(owner, slug):
-    return {"title": slug, "id": f"{owner}/{slug}", "licenses": [{"name": "CC0-1.0"}]}
+def dataset_meta(owner, slug, license_name):
+    return {"title": slug, "id": f"{owner}/{slug}", "licenses": [{"name": license_name}]}
 
 
 def build_datasets(cfg, out):
@@ -224,10 +230,10 @@ def build_datasets(cfg, out):
             shutil.rmtree(d)
     for p in cfg["code_paths"]:
         copy_entry(REPO / p, code / p, py_only=True)
-    write_json(code / "dataset-metadata.json", dataset_meta(cfg["owner"], cfg["code_dataset"]))
+    write_json(code / "dataset-metadata.json", dataset_meta(cfg["owner"], cfg["code_dataset"], cfg.get("code_license", "CC0-1.0")))
     for item in cfg["data"]:
         copy_entry(REPO / item["src"], data / item["dest"], py_only=False)
-    write_json(data / "dataset-metadata.json", dataset_meta(cfg["owner"], cfg["data_dataset"]))
+    write_json(data / "dataset-metadata.json", dataset_meta(cfg["owner"], cfg["data_dataset"], cfg.get("data_license", "unknown")))
 
 
 def check_placeholders(entry, slugs):
@@ -315,7 +321,28 @@ def run_cmd(cmd, dry):
 
 def dataset_exists(ref):
     r = subprocess.run(["kaggle", "datasets", "status", ref], capture_output=True, text=True)
-    return r.returncode == 0 and "ready" in r.stdout.lower()
+    out = r.stdout.strip().lower()
+    if r.returncode == 0 and out in ("ready", "pending", "queued", "running", "error"):
+        return True
+    detail = (r.stderr.strip() or r.stdout.strip()).splitlines()
+    print(f"dataset status for {ref} failed (rc={r.returncode}): {detail[-1] if detail else 'no output'}; "
+          "assuming absent (will try create)")
+    return False
+
+
+def wait_dataset_ready(ref, timeout, interval=15):
+    start = time.monotonic()
+    while True:
+        r = subprocess.run(["kaggle", "datasets", "status", ref], capture_output=True, text=True)
+        text = (r.stdout.strip() or r.stderr.strip())
+        if r.returncode == 0 and "ready" in r.stdout.lower():
+            print(f"dataset {ref} ready")
+            return True
+        elapsed = int(time.monotonic() - start)
+        if elapsed >= timeout:
+            return False
+        print(f"waiting for {ref}: {text or 'no output'} ({elapsed}s/{timeout}s)")
+        time.sleep(interval)
 
 
 def cmd_push(args, manifest, cfg):
@@ -335,6 +362,10 @@ def cmd_push(args, manifest, cfg):
         cmd = (["kaggle", "datasets", "version", "-p", path, "-m", sha, "-r", "zip"]
                if dataset_exists(ref) else ["kaggle", "datasets", "create", "-p", path, "-r", "zip"])
         if run_cmd(cmd, False):
+            return 1
+        timeout = int(cfg.get("dataset_ready_timeout", 900))
+        if not wait_dataset_ready(ref, timeout):
+            print(f"error: dataset {ref} not ready after {timeout}s; aborting before kernel pushes", file=sys.stderr)
             return 1
     for e in entries:
         kdir = out / "kernels" / kernel_slug(e, args.smoke)
