@@ -1,4 +1,4 @@
-% A LaTeX template for MSc Thesis submissions to 
+% A LaTeX template for MSc Thesis submissions to
 % Politecnico di Milano (PoliMi) - School of Industrial and Information Engineering
 %
 % P. F. Antonietti, S. Bonetti, A. Gruttadauria, G. Mescolini, A. Zingaro
@@ -20,7 +20,7 @@
 \RequirePackage[bf, font=onehalfspacing]{caption} % caption: FIG in bold, 1.5 line spacing in figure and table captions
 \newcommand{\thesisspacing}{\onehalfspacing}
 
-% Define new command: numbered and un-numbered chapter in Polimi style. 
+% Define new command: numbered and un-numbered chapter in Polimi style.
 
 \let\latexchapter\chapter
 \renewcommand{\chapter}{\@ifstar{\polimichapterstar}{\polimichapter}}
@@ -39,7 +39,7 @@
 \newcommand{\polimichapterstar}[1]{
     \cleardoublepage % To make sure the previous headers are passed
     \phantomsection % To help hyperref link to the right page
-    \latexchapter*{#1} 
+    \latexchapter*{#1}
    \renewcommand{\headrulewidth}{0pt} %removing the horizontal line in the header
     \addcontentsline{toc}{chapter}{#1} % Also adds the chapter name to the Contents
     \fancyhead[LO, RE]{ \bfseries \textcolor{bluepoli}{|   } #1} % Header \textbf{\leftmark} \hspace{1mm}}
@@ -73,7 +73,7 @@
 }}}
 
 % Define new command: adding background picture (halo) on top right (used for cover page)
-\newcommand\BackgroundPicTR{% Adding background picture on top right 
+\newcommand\BackgroundPicTR{% Adding background picture on top right
 	\put(200,330){%
 		\parbox[b][\paperheight]{\paperwidth}{%
 			\vfill
@@ -115,7 +115,7 @@
             \\
 			\vspace{2.5cm}
 			\\
-			{{\color{bluepoli} \singlespacing \huge \bfseries \thesistitle \par}}	
+			{{\color{bluepoli} \singlespacing \huge \bfseries \thesistitle \par}}
 			\vspace{1.5cm}
 			{\color{bluepoli} \bfseries \large{\textsc{Tesi di Laurea Magistrale in\\ \course}}\par}
 			\vspace{1.5 cm}
