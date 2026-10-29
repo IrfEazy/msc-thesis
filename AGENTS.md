@@ -13,7 +13,8 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - Some notebooks read data, model and embedder paths from the untracked `.env` via `python-dotenv` (details in `notebooks/AGENTS.md`); others hard-code them. Never print or commit `.env`.
 
 ## Environment
-- No requirements file. Package dependencies of `MLC` are in `MLC/AGENTS.md`.
+- Managed with uv (`pyproject.toml`, `uv.lock`, `.python-version` 3.12; `.venv` is ignored). Set up with `uv sync`, run with `uv run ...` (e.g. `uv run jupyter nbconvert --execute`), add packages with `uv add` (`uv add --dev` for tooling). `MLC` is not installed as a package; its own dependencies are in `MLC/AGENTS.md`.
+- `torch` comes from the PyTorch CPU wheel index (`[[tool.uv.index]] pytorch-cpu`, `[tool.uv.sources]` in `pyproject.toml`) because the machine has no GPU. For GPU, change that index URL to a CUDA one (e.g. `https://download.pytorch.org/whl/cu126`) or drop the `torch` source, then `uv lock` and `uv sync`.
 - Root modules import nltk, sentence-transformers, xgboost, pandas (`utils.py`), emoji and pydot (`preprocess_functions.py`). They call `nltk.download` at import (network access).
 - No tests, lint or CI config exist.
 - Run code from the repo root: notebooks import root modules and `notebooks.utils`.
