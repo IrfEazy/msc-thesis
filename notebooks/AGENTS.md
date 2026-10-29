@@ -16,6 +16,9 @@
 ## Recorded Python versions (`language_info.version`)
 - 3.10.14: `MultiLabelClassification*`; 3.11.13: `filter`, `MLC_Notebook`; 3.13.2: `MLCCS`, `MLCGeneral`, `Train-Test split`; 2.7.6: `SystemLabelAssignment` (likely stale metadata).
 
+## Device selection
+- `filter` and `MultiLabelClassification*` (except SMOTE) pass `device=select_device()` (root `device.py`, env `COMPUTE_DEVICE`: auto, cpu or cuda) to every active `XGBClassifier`.
+
 ## Legacy notebook
 - `MultiLabelClassificationSMOTE.ipynb` is legacy and does not run: it imports `MultiLabelClassifier` and SMOTE helpers from `utils`, which were deliberately removed in commit 16e936a. They are recoverable from `16e936a^`, which also needed `bayes_opt`.
 
