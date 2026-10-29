@@ -39,3 +39,24 @@ dev = [
     "nbclient>=0.11.0",
     "nbconvert>=7.17.2",
 ]
+
+[tool.kaggle-export]
+# Provided by the Kaggle GPU image; reinstalling would replace its CUDA-matched builds.
+preinstalled = [
+    "torch",
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-learn",
+    "xgboost",
+    "matplotlib",
+    "seaborn",
+    "nltk",
+    "joblib",
+    "tqdm",
+    "sentence-transformers",
+    "transformers",
+    "tokenizers",
+    "huggingface-hub",
+    "safetensors",
+]

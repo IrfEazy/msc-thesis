@@ -5,6 +5,7 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 ## Layout
 - `MLC/` - installable multi-label classifier package (see `MLC/AGENTS.md`).
 - `notebooks/` - pipeline notebooks and `notebooks/utils.py` (see `notebooks/AGENTS.md`).
+- `device.py` - XGBoost device selection; `scripts/export_kaggle_requirements.py` - writes `requirements-kaggle.txt`.
 - `utils.py`, `preprocess_functions.py` - root helper modules (which notebooks import them: `notebooks/AGENTS.md`).
 - `data/` - datasets (local only).
 
@@ -14,7 +15,9 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 
 ## Environment
 - Managed with uv (`pyproject.toml`, `uv.lock`, `.python-version` 3.12; `.venv` is ignored). Set up with `uv sync`, run with `uv run ...` (e.g. `uv run jupyter nbconvert --to notebook --execute <nb>.ipynb`), add packages with `uv add` (`uv add --dev` for tooling). `MLC` is not installed as a package; its own dependencies are in `MLC/AGENTS.md`.
-- `torch` comes from the PyTorch CPU wheel index (`[[tool.uv.index]] pytorch-cpu`, `[tool.uv.sources]` in `pyproject.toml`) because the machine has no GPU. For GPU, change that index URL to a CUDA one (e.g. `https://download.pytorch.org/whl/cu126`) or drop the `torch` source, then `uv lock` and `uv sync`.
+- Local dev uses the CPU torch pin (`[[tool.uv.index]] pytorch-cpu`, `[tool.uv.sources]` in `pyproject.toml`).
+- GPU experiments run on Kaggle without `uv sync` (it would replace the image's CUDA stack): upload the repo code, then `pip install -r requirements-kaggle.txt`. That file is exported from `uv.lock` without the packages listed in `[tool.kaggle-export] preinstalled` (`pyproject.toml`); regenerate it with `uv run python scripts/export_kaggle_requirements.py` after changing dependencies or that list. Pinned transitive constraints may still upgrade image packages, so check the pip output and installed versions.
+- `device.py` `select_device()` picks the XGBoost device from env `COMPUTE_DEVICE` (`auto` default, `cpu`, `cuda`; `cuda` without CUDA raises); `auto` uses CUDA only if torch sees a GPU.
 - Root modules import nltk, sentence-transformers, xgboost, pandas (`utils.py`), emoji and pydot (`preprocess_functions.py`). They call `nltk.download` at import (network access).
 - No tests, lint or CI config exist.
 - Run code from the repo root: notebooks import root modules and `notebooks.utils`.
