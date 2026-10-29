@@ -404,3 +404,6 @@ $RECYCLE.BIN/
 /data/
 
 .conda/
+# Local agent files (not shared)
+CLAUDE.local.md
+.claude/settings.local.json
