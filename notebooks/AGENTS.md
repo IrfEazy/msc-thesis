@@ -11,7 +11,8 @@
 
 ## Environment variables
 - Only `filter`, `Train-Test split` and `MLC_Notebook` read env vars (`load_dotenv()`, then `os.chdir(ROOT)`); values are in the local `.env` (see root `AGENTS.md`). The other notebooks use hard-coded or relative paths.
-- Names seen: `ROOT`, `RANDOM_STATE`, `TEST_SIZE`, `TWEETS_CSV`, `FILTER_TRAIN_CSV`, `FILTER_TEST_CSV`, `TEMP_CATEGORIES_TRAIN_CSV`, `TEMP_CATEGORIES_TEST_CSV`, `ONE_STEP_CATEGORIES_TRAIN_CSV`, `ONE_STEP_CATEGORIES_TEST_CSV`, `COTOV_CSV`, `CV`, `FILTER_MODELS`, `FILTERS_PERFORMANCES_CSV`, `OPTIMAL_FILTER_PICKLE`, `MODELS_DIR`, `MAPPINGS_DIR`, embedder paths (`SBERT_PATH`, `ATTACK_BERT_PATH`, `DISTILROBERTA_PATH`, `GLOVE_6B_{50,100,200,300}D_PATH`).
+- Names seen: `ROOT`, `RANDOM_STATE`, `TEST_SIZE`, `TWEETS_CSV`, `FILTER_TRAIN_CSV`, `FILTER_TEST_CSV`, `TEMP_CATEGORIES_TRAIN_CSV`, `TEMP_CATEGORIES_TEST_CSV`, `ONE_STEP_CATEGORIES_TRAIN_CSV`, `ONE_STEP_CATEGORIES_TEST_CSV`, `COTOV_CSV`, `CV`, `FILTER_MODELS`, `FILTERS_PERFORMANCES_CSV`, `OPTIMAL_FILTER_PICKLE`, `OVERWRITE`, `MODELS_DIR`, `MAPPINGS_DIR`, embedder paths (`SBERT_PATH`, `ATTACK_BERT_PATH`, `DISTILROBERTA_PATH`, `GLOVE_6B_{50,100,200,300}D_PATH`).
+- `filter`: `OVERWRITE` comes from env `OVERWRITE` (default false); the manifest sets it true so the tuned filter is saved before it is reloaded.
 
 ## Recorded Python versions (`language_info.version`)
 - 3.10.14: `MultiLabelClassification*`; 3.11.13: `filter`, `MLC_Notebook`; 3.13.2: `MLCCS`, `MLCGeneral`, `Train-Test split`; 2.7.6: `SystemLabelAssignment` (likely stale metadata).
