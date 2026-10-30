@@ -105,6 +105,11 @@ for p in (str(REPO_DIR),):
     sys.path.insert(0, p)
 os.chdir(CWD)
 
+for argv in CFG["setup_commands"]:
+    argv = [sys.executable if a == "{python}" else resolve(a) for a in argv]
+    print("setup:", " ".join(argv), flush=True)
+    subprocess.run(argv, check=True)
+
 for name in CFG["block_imports"]:
     sys.modules[name] = None  # also works for dotted names such as google.colab
     try:
@@ -238,18 +243,32 @@ def build_datasets(cfg, out):
 
 def check_placeholders(entry, slugs):
     texts = [entry["kaggle"].get("cwd", "")] + [str(v) for v in entry.get("env", {}).values()] \
-        + [str(v) for v in entry["kaggle"].get("links", {}).values()]
+        + [str(v) for v in entry["kaggle"].get("links", {}).values()] \
+        + [a for c in entry["kaggle"].get("setup_commands", []) for a in c]
     for t in texts:
         for s in PLACEHOLDER.findall(t):
             if s not in slugs:
                 sys.exit(f"{entry['name']}: {{input:{s}}} is not an attached dataset ({sorted(slugs)})")
 
 
+def setup_commands(cfg, entry):
+    out = []
+    for where, lst in (("[kaggle]", cfg.get("setup_commands", [])), (entry["name"], entry["kaggle"].get("setup_commands", []))):
+        if not isinstance(lst, list):
+            sys.exit(f"{entry['name']}: setup_commands in {where} must be a list of argv lists")
+        for c in lst:
+            if not (isinstance(c, list) and c and all(isinstance(a, str) for a in c)):
+                sys.exit(f"{entry['name']}: setup_commands in {where}: each command must be a non-empty list of strings, got {c!r}")
+            out.append(c)
+    return out
+
+
 def bootstrap_source(cfg, entry, cfg_extra):
     k = entry["kaggle"]
     datasets = k["datasets"]
     slugs = [d.split("/", 1)[1] for d in datasets]
-    check_placeholders(entry, slugs)
+    k = {**k, "setup_commands": setup_commands(cfg, entry)}
+    check_placeholders({**entry, "kaggle": k}, slugs)
     code_ref = f"{cfg['owner']}/{cfg['code_dataset']}"
     for need in (code_ref, f"{cfg['owner']}/{cfg['data_dataset']}"):
         if need not in datasets:
@@ -259,7 +278,7 @@ def bootstrap_source(cfg, entry, cfg_extra):
         "slugs": slugs, "code_slug": cfg["code_dataset"], "links": k.get("links", {}),
         "outputs_dirs": k.get("outputs_dirs", []), "env": {kk: str(v) for kk, v in entry.get("env", {}).items()},
         "cwd": k.get("cwd", "{repo}"), "block_imports": k.get("block_imports", []),
-        "revision": rn.revision(), "source_sha256": hashlib.sha256(src).hexdigest(),
+        "setup_commands": k["setup_commands"], "revision": rn.revision(), "source_sha256": hashlib.sha256(src).hexdigest(),
         **cfg_extra,
     }
     return f"{BOOTSTRAP_HEADER}\nimport json\nCFG = json.loads({json.dumps(conf)!r})\n" + BOOTSTRAP_BODY
