@@ -41,6 +41,6 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 
 ## Kaggle bundles
 - `[kaggle]` and each Kaggle notebook's `[notebooks.kaggle]` subtable in `experiments.toml` declare datasets, kernels, cwd, env, links and output dirs; `scripts/kaggle_bundle.py` executes them generically.
-- Workflow: `build` (writes `build/kaggle/`, gitignored) -> `push --smoke` -> `status` / `fetch` (outputs to `runs/kaggle/<slug>/`) -> full `push`. `push --dry-run` prints the Kaggle CLI commands only; `push --kernels-only` skips datasets, and push waits for free GPU sessions (`max_gpu_sessions`, `--no-wait` to skip) and exits 1 listing kernels whose push reported an error.
+- Workflow: `build` (writes `build/kaggle/`, gitignored) -> `push --smoke` -> `status` / `fetch` (outputs to `runs/kaggle/<slug>/`) -> full `push`. `push --dry-run` prints the Kaggle CLI commands only; `push --kernels-only` skips datasets, and push waits for free GPU sessions (`max_gpu_sessions`, counting all running/queued manifest kernels; retries a session-limit rejection; `--no-wait` to skip) and exits 1 listing kernels whose push reported an error.
 - The data dataset needs `runs/splits/data` from `run_notebooks.py --only 'Train-Test split' --out runs/splits`.
 - Credentials come from the user's local Kaggle CLI config; never commit or print them.

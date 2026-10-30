@@ -372,6 +372,10 @@ def cmd_push(args, manifest, cfg):
     limit = int(cfg.get("max_gpu_sessions", 2))
     interval = int(cfg.get("gpu_poll_interval", 60))
     pushed, failed = [], []
+    # Every kernel ref of the manifest (full and smoke), so sessions still running from
+    # earlier invocations count toward the limit.
+    known = {f"{cfg['owner']}/{kernel_slug(n, sm)}"
+             for n in selected(manifest, None) for sm in (False, True)}
     for e in entries:
         slug = kernel_slug(e, args.smoke)
         kdir = out / "kernels" / slug
@@ -383,9 +387,16 @@ def cmd_push(args, manifest, cfg):
         if args.dry_run:
             run_cmd(cmd, True)
             continue
-        if gpu and not args.no_wait:
-            wait_gpu_slot(pushed, limit, interval)
-        if push_kernel(cmd):
+        while True:
+            if gpu and not args.no_wait:
+                wait_gpu_slot(sorted(known | set(pushed)), limit, interval)
+            result = push_kernel(cmd)
+            if result == "limit" and gpu and not args.no_wait:
+                print(f"GPU session limit reported; retrying in {interval}s")
+                time.sleep(interval)
+                continue
+            break
+        if result == "ok":
             pushed.append(f"{cfg['owner']}/{slug}")
         else:
             failed.append(slug)
@@ -396,20 +407,22 @@ def cmd_push(args, manifest, cfg):
 
 
 def push_kernel(cmd):
-    """Run a kernel push; True only if rc == 0 and the output reports no error."""
+    """Run a kernel push; "ok", "limit" (GPU session limit reached) or "fail"."""
     print("$", " ".join(cmd))
     r = subprocess.run(cmd, capture_output=True, text=True)
     text = (r.stdout or "") + (r.stderr or "")
     if text.strip():
         print(text.rstrip())
+    if "maximum batch gpu session" in text.lower():
+        return "limit"
     if r.returncode != 0 or "error" in text.lower():
         print(f"error: kernel push failed (rc={r.returncode})", file=sys.stderr)
-        return False
-    return True
+        return "fail"
+    return "ok"
 
 
 def active_sessions(refs):
-    """Number of the given kernels whose status is RUNNING or QUEUED."""
+    """Number of the given kernels whose status is RUNNING or QUEUED (failing calls count as inactive)."""
     n = 0
     for ref in refs:
         r = subprocess.run(["kaggle", "kernels", "status", ref], capture_output=True, text=True)
@@ -419,9 +432,9 @@ def active_sessions(refs):
     return n
 
 
-def wait_gpu_slot(pushed, limit, interval):
+def wait_gpu_slot(refs, limit, interval):
     while True:
-        n = active_sessions(pushed) if pushed else 0
+        n = active_sessions(refs)
         if n < limit:
             return
         print(f"waiting for a GPU session slot: {n}/{limit} running or queued; next check in {interval}s")
