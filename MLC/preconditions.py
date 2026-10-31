@@ -1,3 +1,4 @@
+import functools
 import inspect
 import numpy
 from typing import Callable
@@ -19,6 +20,7 @@ def check_binary_matrices(*param_names: str) -> Callable:
     """
 
     def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Get function signature and bind arguments
             sig = inspect.signature(func)
@@ -32,7 +34,7 @@ def check_binary_matrices(*param_names: str) -> Callable:
                 if param in bound_args.arguments
             ]
 
-            # Check row consistency
+            # Check that each parameter is a 2D binary matrix
             for param, arr in zip(param_names, arrays):
                 if arr.ndim != 2:
                     raise ValueError(f"Parameter '{param}' must be a 2D matrix.")
@@ -77,6 +79,7 @@ def check_same_columns(*param_names: str) -> Callable:
             Function that wraps the function requiring the check.
         """
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             """
             Wrapper function that checks the specified parameters for column consistency.
@@ -128,6 +131,7 @@ def check_same_rows(*param_names: str) -> Callable:
     """
 
     def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Get function signature and bind arguments
             sig = inspect.signature(func)
