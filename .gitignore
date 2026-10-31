@@ -410,3 +410,6 @@ CLAUDE.local.md
 
 # Notebook runner output
 runs/
+
+# Checkpoint stores of the staged notebooks
+checkpoints/
