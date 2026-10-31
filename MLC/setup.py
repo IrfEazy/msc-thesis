@@ -4,5 +4,5 @@ setup(
     name="MLC",
     version="0.1",
     packages=find_packages(),
-    install_requires=["numpy", "scikit-learn", "tqdm"],
+    install_requires=["numpy", "scikit-learn", "scipy"],
 )

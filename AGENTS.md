@@ -21,7 +21,7 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - GPU experiments run on Kaggle without `uv sync` (it would replace the image's CUDA stack): `scripts/kaggle_bundle.py` generates the bundles (see Kaggle bundles); the bootstrap installs `requirements-kaggle.txt`. That file is exported from `uv.lock` without the packages listed in `[tool.kaggle-export] preinstalled` (`pyproject.toml`) or the dependencies only they need (`uv export --prune`); regenerate it with `uv run python scripts/export_kaggle_requirements.py` after changing dependencies or that list. Pinned transitive constraints may still upgrade image packages, so check the pip output and installed versions.
 - `device.py` `select_device()` picks the XGBoost device from env `COMPUTE_DEVICE` (`auto` default, `cpu`, `cuda`; `cuda` without CUDA raises); `auto` uses CUDA only if torch sees a GPU.
 - Root modules import nltk, sentence-transformers, xgboost, pandas (`utils.py`), emoji and pydot (`preprocess_functions.py`). They call `nltk.download` at import (network access).
-- No tests, lint or CI config exist for the code itself.
+- The only tests are the `MLC` unittest suite (`uv run python -m unittest discover -s MLC/tests -t .`, details in `MLC/AGENTS.md`); no lint or CI config exists.
 
 ## Notebook runner
 - `experiments.toml` is the declarative per-notebook manifest (local vs Kaggle target, cwd, env, inputs, outputs, static blocks, archives); `scripts/run_notebooks.py` executes it generically.
@@ -34,7 +34,7 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - Text cleaning: `clean_text`, `get_wordnet_pos`, `lemmatize_text`, `remove_stopwords`, `tokenizer_transform` exist under the same name in root `utils.py` and `notebooks/utils.py`; `replace_text_components` (root) vs `replace_txt_components` (notebooks) are near-duplicates.
 - Hierarchy helpers: `preprocess_functions.py` `build_tree`/`extract_keys`/`map_targets` vs `notebooks/utils.py` `construct_hierarchy`/`flatten_dict_keys`/`translate_src_categories` (inferred equivalents). `map_targets` and `translate_src_categories` (and the local `map_targets` copies in `MLCGeneral`/`MLCCS`) return sorted label lists, which the deterministic Train-Test split depends on.
 - `load_word2vec_dict`, `preprocess_texts`: root `preprocess_functions.py` and `notebooks/utils.py`.
-- `assess`: `notebooks/utils.py` and `MLC/functions.py`.
+- `assess`: `notebooks/utils.py` and `MLC/functions.py` (the MLC version adds optional `Y_score`; see `MLC/AGENTS.md`).
 - Root `utils.py` also has standalone classifier classes (e.g. `CalibratedLabelRankClassifier`, `ChainOfClassifiers`); these are not the `MLC` package.
 
 ## Working with notebooks and data
