@@ -1,169 +1,141 @@
-from typing import cast, TypeVar
-
 import numpy
 from numpy.typing import ArrayLike
-from sklearn.base import BaseEstimator, ClassifierMixin, clone
-from sklearn.linear_model import LogisticRegression
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.model_selection import KFold, StratifiedKFold
 
+from ._base import fit_binary, positive_score, resolve_estimator
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
+def _binary_predict(est, X) -> numpy.ndarray:
+    """0/1 prediction of a fitted binary estimator (score > 0.5 when it has
+    ``predict_proba``, else its own ``predict``)."""
+    if hasattr(est, "predict_proba"):
+        return (positive_score(est, X) > 0.5).astype(int)
+    return (numpy.asarray(est.predict(X)) == 1).astype(int)
+
+
 class MBRClassifier(BaseEstimator, ClassifierMixin):
+    """Meta Binary Relevance / 2BR (Bogatinovski et al. 2022).
+
+    Stage 1 is BR on X. Stage 2 is BR on ``[X, F]`` where F are the stage-1
+    positive-class scores. For training, F is out-of-fold (``cv`` folds, per
+    label) so the meta features are not fitted in-sample; stage 1 is then
+    refit on all data for prediction.
+
+    Parameters
+    ----------
+    base_estimator : estimator, default None
+        Stage-1 binary classifier. None means a fresh
+        ``LogisticRegression(max_iter=1000)``.
+    meta_estimator : estimator, default None
+        Stage-2 binary classifier. None means a fresh
+        ``LogisticRegression(max_iter=1000)``.
+    cv : int or None, default 5
+        Number of folds for the out-of-fold stage-1 scores (shuffled
+        StratifiedKFold when the label has at least ``cv`` samples in each
+        class, else KFold). None uses legacy in-sample stage-1 scores.
+    random_state : int or None, default None
+        Seed of the fold shuffling.
+
+    Attributes
+    ----------
+    first_stage_estimators_ : list of q classifiers fitted on all data
+    meta_estimators_ : list of q classifiers fitted on ``[X, F]``
+    n_labels_ : int
+
+    Notes
+    -----
+    ``predict_proba`` returns the stage-2 positive-class scores.
+    """
+
     def __init__(
         self,
-        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
-        meta_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        base_estimator: ClassifierMixin | None = None,
+        meta_estimator: ClassifierMixin | None = None,
+        cv: int | None = 5,
+        random_state=None,
     ):
-        """
-        Parameters
-        ----------
-        base_estimator : ClassifierMixin
-            The classifier used in the first (BR) stage.
-        meta_estimator : ClassifierMixin
-            The classifier used in the second (meta) stage.
-        """
-        self.meta_classifiers_ = None
-        self.first_stage_classifiers_ = None
-        self.n_labels_ = None
         self.base_estimator = base_estimator
         self.meta_estimator = meta_estimator
+        self.cv = cv
+        self.random_state = random_state
+
+    def _oof_scores(self, template, X, y):
+        n_splits = self.cv
+        counts = numpy.bincount(y.astype(int), minlength=2)
+        if counts.min() >= n_splits:
+            splitter = StratifiedKFold(n_splits, shuffle=True, random_state=self.random_state)
+        else:
+            splitter = KFold(n_splits, shuffle=True, random_state=self.random_state)
+        scores = numpy.zeros(X.shape[0])
+        for train, val in splitter.split(X, y):
+            est = fit_binary(template, X[train], y[train])
+            scores[val] = positive_score(est, X[val])
+        return scores
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
     def fit(self, X: ArrayLike, Y: ArrayLike) -> "MBRClassifier":
         """
-        Fit the Meta Binary Relevance classifier.
-
-        This method trains |L| binary classifiers in the first stage (BR) using the entire training set.
-        Then, it obtains first-stage predictions to augment the original feature space, and trains |L|
-        meta classifiers on the extended features.
+        Fit stage 1 (BR on X) and stage 2 (BR on X plus stage-1 scores).
 
         Parameters
         ----------
         X : ArrayLike of shape (n_samples, n_features)
-            The training input samples.
         Y : ArrayLike of shape (n_samples, n_labels)
-            The binary indicator matrix for labels.
 
         Returns
         -------
         self : "MBRClassifier"
-            Returns self.
         """
-        Y = numpy.array(Y)
-        n_samples, n_labels = Y.shape
-        self.n_labels_ = n_labels
+        X = numpy.asarray(X)
+        Y = numpy.asarray(Y)
+        q = Y.shape[1]
+        base = resolve_estimator(self.base_estimator)
+        meta = resolve_estimator(self.meta_estimator)
 
-        # -----------------------------
-        # First Stage: Binary Relevance
-        # -----------------------------
-        self.first_stage_classifiers_ = []
-        T = TypeVar("T", bound=ClassifierMixin)
-        for i in range(n_labels):
-            clf: T = cast(T, clone(self.base_estimator))
-            clf.fit(X, Y[:, i])
-            self.first_stage_classifiers_.append(clf)
-
-        # Generate first-stage predictions on training data.
-        # We assume that the estimator has a predict_proba method.
-        first_stage_predictions = numpy.zeros((n_samples, n_labels))
-        for i in range(n_labels):
-            # Use probability for the positive class
-            first_stage_predictions[:, i] = self.first_stage_classifiers_[
-                i
-            ].predict_proba(X)[:, 1]
-
-        # Augment the original features with the first-stage predictions.
-        X_meta = numpy.hstack((X, first_stage_predictions))
-
-        # -----------------------------------------
-        # Second Stage: Meta-Level Binary Relevance
-        # -----------------------------------------
-        self.meta_classifiers_ = []
-        for i in range(n_labels):
-            clf: T = cast(T, clone(self.meta_estimator))
-            clf.fit(X_meta, Y[:, i])
-            self.meta_classifiers_.append(clf)
+        first = [fit_binary(base, X, Y[:, i]) for i in range(q)]
+        if self.cv is None:
+            F = numpy.column_stack([positive_score(e, X) for e in first])
+        else:
+            F = numpy.column_stack([self._oof_scores(base, X, Y[:, i]) for i in range(q)])
+        X_meta = numpy.hstack((X, F))
+        self.first_stage_estimators_ = first
+        self.meta_estimators_ = [fit_binary(meta, X_meta, Y[:, i]) for i in range(q)]
+        self.n_labels_ = q
         return self
 
-    def predict_proba(self, X: ArrayLike) -> ArrayLike:
+    def _meta_features(self, X):
+        X = numpy.asarray(X)
+        F = numpy.column_stack([positive_score(e, X) for e in self.first_stage_estimators_])
+        return numpy.hstack((X, F))
+
+    def predict_proba(self, X: ArrayLike) -> numpy.ndarray:
         """
-        Predict probability estimates for each label.
+        Stage-2 positive-class score of each label, shape (n_samples, n_labels).
+        """
+        X_meta = self._meta_features(X)
+        return numpy.column_stack([positive_score(e, X_meta) for e in self.meta_estimators_])
 
-        First, the first-stage classifiers are applied to X to generate predictions.
-        These predictions augment the original feature space to form X_meta.
-        Then, the meta classifiers provide the final probability estimates.
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            Input samples.
+    def predict(self, X: ArrayLike) -> numpy.ndarray:
+        """
+        Predict labels with the stage-2 models (scores above 0.5 for
+        estimators with ``predict_proba``, else their own ``predict``).
 
         Returns
         -------
-        probabilities : ArrayLike of shape (n_samples, n_labels)
-            Probability estimates for each label.
+        Y_pred : ndarray of int, shape (n_samples, n_labels)
         """
-        n_samples = X.shape[0]
-
-        # First-stage predictions on new data.
-        first_stage_predictions = numpy.zeros((n_samples, self.n_labels_))
-        for i in range(self.n_labels_):
-            first_stage_predictions[:, i] = self.first_stage_classifiers_[
-                i
-            ].predict_proba(X)[:, 1]
-
-        # Augment original features with first-stage predictions.
-        X_meta = numpy.hstack((X, first_stage_predictions))
-
-        # Second-stage (meta) predictions.
-        probabilities = numpy.zeros((n_samples, self.n_labels_))
-        for i in range(self.n_labels_):
-            probabilities[:, i] = self.meta_classifiers_[i].predict_proba(X_meta)[:, 1]
-        return probabilities
-
-    def predict(self, X: ArrayLike):
-        """
-        Predict the multi-label outputs for each instance.
-
-        Labels are predicted as relevant (1) if the estimated probability exceeds 0.5.
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            Input data.
-
-        Returns
-        -------
-        predictions : ArrayLike of shape (n_samples, n_labels)
-            Binary predictions for each label.
-        """
-        probabilities = self.predict_proba(X)
-        predictions = (probabilities > 0.5).astype(int)
-        return predictions
+        X_meta = self._meta_features(X)
+        return numpy.column_stack([_binary_predict(e, X_meta) for e in self.meta_estimators_])
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
-    def evaluate(self, X: ArrayLike, Y: ArrayLike):
+    def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
-        Evaluate the classifier using standard multi-label metrics.
-
-        The function computes:
-          - Subset Accuracy: fraction of samples with exactly correct label set.
-          - Micro-averaged F1 score.
-          - Hamming Loss.
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            Input samples.
-        Y : ArrayLike of shape (n_samples, n_labels)
-            True binary indicator matrix of labels.
-
-        Returns
-        -------
-        metrics : dict
-            Dictionary containing accuracy, micro F1 score, and hamming loss.
+        Evaluate on the given data; see ``functions.assess`` (AUC uses
+        ``predict_proba`` scores).
         """
-        return assess(Y, self.predict(X))
+        return assess(Y, self.predict(X), self.predict_proba(X))
