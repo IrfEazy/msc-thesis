@@ -5,7 +5,8 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 ## Layout
 - `MLC/` - installable multi-label classifier package (see `MLC/AGENTS.md`).
 - `notebooks/` - pipeline notebooks and `notebooks/utils.py` (see `notebooks/AGENTS.md`).
-- `device.py` - XGBoost device selection; `scripts/export_kaggle_requirements.py` - writes `requirements-kaggle.txt`.
+- `device.py` - XGBoost device selection.
+- `scripts/` - `run_notebooks.py` (notebook runner), `kaggle_bundle.py` (Kaggle bundles), `export_kaggle_requirements.py` (writes `requirements-kaggle.txt`); operating Kaggle runs: `scripts/AGENTS.md`.
 - `thesis/` - LaTeX thesis sources (see `thesis/AGENTS.md`).
 - `utils.py`, `preprocess_functions.py` - root helper modules (which notebooks import them: `notebooks/AGENTS.md`).
 - `data/` - datasets (local only).
@@ -45,3 +46,8 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - Workflow: `build` (writes `build/kaggle/`, gitignored) -> `push --smoke` -> `status` / `fetch` (outputs to `runs/kaggle/<slug>/`) -> full `push`. `push --dry-run` prints the Kaggle CLI commands only; `push --kernels-only` skips datasets, and push waits for free GPU sessions (`max_gpu_sessions`, counting all running/queued manifest kernels; retries a session-limit rejection; `--no-wait` to skip) and exits 1 listing kernels whose push reported an error.
 - The data dataset needs `runs/splits/data` from `run_notebooks.py --only 'Train-Test split' --out runs/splits`.
 - Credentials come from the user's local Kaggle CLI config; never commit or print them.
+- Operating runs (quota, waiting, fetching, reading logs, durations): `scripts/AGENTS.md`; run history: `notebooks/kaggle-runs.md`.
+
+## Working with the user
+- Reply in the language the user writes in (usually Italian).
+- On a failed run: fetch the log, find the root cause, propose fix options and let the user choose, then fix, commit and relaunch only that kernel.
