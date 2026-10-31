@@ -1,34 +1,30 @@
-from typing import List, Optional
-
 import numpy
 from numpy.typing import ArrayLike
-from sklearn.base import BaseEstimator, ClassifierMixin, clone
-from sklearn.cluster import KMeans
-from sklearn.linear_model import LogisticRegression
+from scipy.optimize import linear_sum_assignment
+from sklearn.base import BaseEstimator, ClassifierMixin
 
+from ._base import fit_binary, positive_score, resolve_estimator
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
-# Helper Node class to represent a node in the hierarchy.
 class Node:
-    def __init__(self, labels: List[int]):
-        """
-        Initialize a node in the hierarchy.
+    """Node of the HOMER hierarchy.
 
-        Parameters
-        ----------
-        labels : List[int]
-            The indices of the labels represented by this node.
+    Attributes
+    ----------
+    labels : list of int
+        Indices of the labels represented by the node.
+    children : list of Node
+        Child nodes; their label sets partition ``labels``.
+    models : list
+        One fitted binary classifier per child, predicting the child's
+        meta-label (OR of its labels).
+    is_leaf : bool
+        True for a single-label node (no models).
+    """
 
-        Attributes
-        ----------
-        children : List[Node]
-            Child nodes, whose label sets partition `labels`.
-        models : list
-            One entry per child: a fitted binary classifier of the child's
-            meta-label, or a constant probability (float).
-        """
+    def __init__(self, labels):
         self.labels = labels
         self.models = []
         self.children = []
@@ -36,288 +32,183 @@ class Node:
 
 
 class HOMERClassifier(BaseEstimator, ClassifierMixin):
+    """HOMER: hierarchy of multi-label learners (Tsoumakas et al. 2008).
+
+    The label set is split recursively into ``n_clusters`` groups by balanced
+    k-means over the label indicator columns (each label is a point whose
+    coordinates are its values over all training rows). Each internal node
+    trains one binary model per child on the child's meta-label (OR of the
+    child's labels), using only the training rows that have at least one
+    label of the node (all rows at the root). Prediction goes top-down and
+    descends into a child only if its meta-label score reaches ``threshold``.
+
+    Parameters
+    ----------
+    base_estimator : estimator, default None
+        Binary classifier cloned for each meta-label. None means a fresh
+        ``LogisticRegression(max_iter=1000)``.
+    n_clusters : int, default 2
+        Number of children per node (k of the balanced k-means). A node with
+        fewer labels is split into single labels. Children have floor(n/k)
+        or ceil(n/k) labels.
+    threshold : float, default 0.5
+        A meta-label score at or above it lets the traversal descend, and a
+        leaf score at or above it makes the label relevant.
+    random_state : int or None, default None
+        Seeds the k-means initialisation; a fixed value gives the same tree.
+    n_iter : int, default 10
+        Fixed number of k-means iterations.
+
+    Attributes
+    ----------
+    root_ : Node
+        Root of the hierarchy.
+    n_labels_ : int
+    """
+
     def __init__(
         self,
-        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        base_estimator: ClassifierMixin | None = None,
         n_clusters: int = 2,
         threshold: float = 0.5,
-        random_state: Optional[int] = None,
+        random_state: int | None = None,
+        n_iter: int = 10,
     ):
-        """
-        Initialize the HOMER classifier.
-
-        Parameters
-        ----------
-        base_estimator : ClassifierMixin
-            The base classifier cloned for each meta-label model.
-        n_clusters : int
-            The maximum number of clusters to use for label set splitting.
-        threshold : float
-            The probability threshold for a label to be considered relevant.
-        random_state : Optional[int]
-            The random seed to use for reproducibility.
-        """
-        self.root = None
-        self.n_labels_ = None
-        self.X_ = None
-        self.Y_ = None
         self.base_estimator = base_estimator
         self.n_clusters = n_clusters
         self.threshold = threshold
         self.random_state = random_state
+        self.n_iter = n_iter
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
     def fit(self, X: ArrayLike, Y: ArrayLike) -> "HOMERClassifier":
         """
-        Build the label hierarchy and train the child meta-label models of each node.
+        Build the label hierarchy and train the meta-label models.
 
         Parameters
         ----------
         X : ArrayLike of shape (n_samples, n_features)
-            Input feature matrix.
         Y : ArrayLike of shape (n_samples, n_labels)
             Binary label matrix.
 
         Returns
         -------
         self : "HOMERClassifier"
-            The fitted HOMER classifier.
         """
-        self.Y_ = numpy.array(Y)
-        self.X_ = X
-        self.n_labels_ = self.Y_.shape[1]
-        # Build the tree starting from the full label set.
-        self.root = self._build_tree(X, self.Y_, list(range(self.n_labels_)), True)
+        X = numpy.asarray(X)
+        Y = numpy.asarray(Y)
+        template = resolve_estimator(self.base_estimator)
+        rng = numpy.random.RandomState(self.random_state)
+        self.n_labels_ = Y.shape[1]
+        self.root_ = self._build_tree(
+            X, Y, list(range(self.n_labels_)), template, rng, True
+        )
         return self
 
-    def _fit_meta_model(self, X: ArrayLike, mu: ArrayLike):
+    def _split_labels(self, Y, label_indices, rng):
         """
-        Fit a binary model for a meta-label, or return a constant probability.
+        Partition a label set into balanced groups (balanced k-means).
 
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_subset, n_features)
-            Training samples of the node.
-        mu : ArrayLike of shape (n_subset,)
-            Binary meta-label values.
+        Labels are points (their columns of ``Y`` over all training rows).
+        Centres start from k distinct random labels; each of the ``n_iter``
+        iterations assigns labels to centres with capacities floor(n/k) or
+        ceil(n/k) (optimal assignment, centres replicated per capacity slot)
+        and recomputes the centres.
 
         Returns
         -------
-        model : float or fitted estimator
-            0.0 for an empty subset or an all-zero meta-label, 1.0 for an
-            all-one meta-label, otherwise a fitted clone of the base estimator.
+        groups : list of sorted label-index lists
+            Disjoint, covering ``label_indices``, ordered by smallest label.
         """
-        if mu.shape[0] == 0 or not mu.any():
-            return 0.0
-        if mu.all():
-            return 1.0
-        return clone(self.base_estimator).fit(X, mu)
-
-    @staticmethod
-    def _model_proba(model, x: ArrayLike) -> float:
-        """
-        Probability of the positive meta-label for a single instance.
-
-        Parameters
-        ----------
-        model : float or fitted estimator
-            A constant probability or a fitted binary classifier.
-        x : ArrayLike of shape (1, n_features)
-            The input feature vector.
-
-        Returns
-        -------
-        p : float
-            Probability of class 1.
-        """
-        if isinstance(model, float):
-            return model
-        column = list(model.classes_).index(1)
-        return float(model.predict_proba(x)[0][column])
-
-    def _split_labels(self, Y: ArrayLike, label_indices: List[int]) -> List[List[int]]:
-        """
-        Partition a label set into child label sets.
-
-        Parameters
-        ----------
-        Y : ArrayLike of shape (n_samples, n_labels)
-            Binary label matrix.
-        label_indices : List[int]
-            The indices of the labels to split (at least two).
-
-        Returns
-        -------
-        groups : List[List[int]]
-            Non-empty, disjoint groups covering label_indices.
-        """
-        n_labels_node = len(label_indices)
-        n_clusters = min(self.n_clusters, n_labels_node)
-        if n_labels_node == n_clusters:
+        m = len(label_indices)
+        k = min(self.n_clusters, m)
+        if k >= m:
             return [[lbl] for lbl in label_indices]
-        # Represent each label by its column vector (over all training samples)
-        # and cluster them into n_clusters groups.
-        label_matrix = Y[:, label_indices].T
-        kmeans = KMeans(n_clusters=n_clusters, random_state=self.random_state)
-        clusters = kmeans.fit_predict(label_matrix)
+        points = Y[:, label_indices].T.astype(float)
+        caps = numpy.full(k, m // k)
+        caps[: m % k] += 1
+        slots = numpy.repeat(numpy.arange(k), caps)
+        centres = points[rng.choice(m, size=k, replace=False)]
+        assign = slots[:m]
+        for _ in range(self.n_iter):
+            dist = ((points[:, None, :] - centres[None, :, :]) ** 2).sum(axis=2)
+            rows, cols = linear_sum_assignment(dist[:, slots])
+            assign = numpy.empty(m, dtype=int)
+            assign[rows] = slots[cols]
+            centres = numpy.array([points[assign == c].mean(axis=0) for c in range(k)])
         groups = [
-            [label_indices[i] for i in range(n_labels_node) if clusters[i] == cl]
-            for cl in numpy.unique(clusters)
+            sorted(label_indices[i] for i in range(m) if assign[i] == c)
+            for c in range(k)
         ]
-        if len(groups) < 2:
-            # Degenerate clustering (e.g. identical columns): even contiguous split.
-            groups = [
-                [label_indices[i] for i in part]
-                for part in numpy.array_split(numpy.arange(n_labels_node), n_clusters)
-            ]
-        return groups
+        return sorted(groups, key=lambda g: g[0])
 
-    def _build_tree(
-        self,
-        X: ArrayLike,
-        Y: ArrayLike,
-        label_indices: List[int],
-        is_root: bool = False,
-    ) -> Node:
-        """
-        Recursively build the hierarchy.
-
-        Each internal node trains one binary model per child on the child's
-        meta-label (the OR of Y over the child's labels), using the samples
-        with at least one positive label in the node (all samples at the root).
-        Leaf nodes train no model.
-
-        Parameters
-        ----------
-        X : ArrayLike
-            Input feature matrix.
-        Y : ArrayLike
-            Binary label matrix.
-        label_indices : List[int]
-            The indices of the labels to consider for this node.
-        is_root : bool
-            Whether the node is the root (trained on all samples).
-
-        Returns
-        -------
-        node : Node
-            The node representing the current label set.
-        """
+    def _build_tree(self, X, Y, label_indices, template, rng, is_root=False):
+        """Recursively build the hierarchy (see the class docstring)."""
         node = Node(label_indices)
         if len(label_indices) == 1 and not is_root:
             node.is_leaf = True
             return node
-
         if is_root:
             mask = numpy.ones(Y.shape[0], dtype=bool)
         else:
-            mask = numpy.any(Y[:, label_indices] == 1, axis=1)
-        X_sub = numpy.array(X)[mask]
-        Y_sub = Y[mask]
-
+            mask = Y[:, label_indices].any(axis=1)
+        X_sub, Y_sub = X[mask], Y[mask]
         if len(label_indices) == 1:
             groups = [list(label_indices)]
         else:
-            groups = self._split_labels(Y, label_indices)
+            groups = self._split_labels(Y, label_indices, rng)
         for group in groups:
-            mu = numpy.any(Y_sub[:, group] == 1, axis=1).astype(int)
-            node.models.append(self._fit_meta_model(X_sub, mu))
-            node.children.append(self._build_tree(X, Y, group))
+            mu = Y_sub[:, group].any(axis=1).astype(int)
+            node.models.append(fit_binary(template, X_sub, mu))
+            node.children.append(self._build_tree(X, Y, group, template, rng))
         return node
 
-    def _traverse_predict(self, x: ArrayLike, node: Node) -> ArrayLike:
-        """
-        Recursively traverse the hierarchy for a single instance to obtain label probabilities.
-
-        Parameters
-        ----------
-        x : ArrayLike of shape (n_features,)
-            The input feature vector.
-        node : Node
-            The current node in the hierarchy.
-
-        Returns
-        -------
-        prob : ArrayLike of shape (n_labels,)
-            Predicted probabilities for each label in the global label space.
-            A label has the probability of its leaf at its parent if the
-            traversal reached it, otherwise 0.0.
-        """
-        prob = numpy.zeros(self.n_labels_)
-        x_reshaped = x.reshape(1, -1)
+    def _traverse(self, X, node, active, out):
+        """Fill ``out`` with pruned top-down scores for the rows in ``active``."""
         for child, model in zip(node.children, node.models):
-            p = self._model_proba(model, x_reshaped)
-            if p < self.threshold:
-                continue
+            idx = numpy.flatnonzero(active)
+            if idx.size == 0:
+                return
+            p = numpy.zeros(X.shape[0])
+            p[idx] = positive_score(model, X[idx])
+            reached = active & (p >= self.threshold)
             if child.is_leaf:
-                prob[child.labels[0]] = p
+                out[reached, child.labels[0]] = p[reached]
             else:
-                # Child label sets are disjoint, so the results do not overlap.
-                prob = numpy.maximum(prob, self._traverse_predict(x, child))
-        return prob
+                self._traverse(X, child, reached, out)
 
-    def predict_proba(self, X: ArrayLike) -> ArrayLike:
+    def predict_proba(self, X: ArrayLike) -> numpy.ndarray:
         """
-        Predict marginal probabilities for each label.
+        Pruned top-down scores (not calibrated probabilities).
 
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            The input feature matrix.
+        A label's score is the meta-label score of its leaf, if every
+        meta-label on the path from the root reached ``threshold``; otherwise
+        0.
 
         Returns
         -------
-        probabilities : ArrayLike of shape (n_samples, n_labels)
-            Predicted probabilities for each label in the global label space.
+        scores : ndarray of shape (n_samples, n_labels)
         """
-        n_samples = X.shape[0]
-        probabilities = numpy.zeros((n_samples, self.n_labels_))
-        for i in range(n_samples):
-            probabilities[i] = self._traverse_predict(X[i], self.root)
-        return probabilities
+        X = numpy.asarray(X)
+        out = numpy.zeros((X.shape[0], self.n_labels_))
+        self._traverse(X, self.root_, numpy.ones(X.shape[0], dtype=bool), out)
+        return out
 
-    def predict(self, X: ArrayLike) -> ArrayLike:
+    def predict(self, X: ArrayLike) -> numpy.ndarray:
         """
-        Predict binary labels for each instance.
-
-        A label is predicted as relevant if its predicted probability is at least the threshold.
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            The input feature matrix.
+        Predict labels: 1 where the pruned score is at least ``threshold``.
 
         Returns
         -------
-        Y_pred : ArrayLike of shape (n_samples, n_labels)
-            Predicted binary labels for each instance.
+        Y_pred : ndarray of int, shape (n_samples, n_labels)
         """
-        probabilities = self.predict_proba(X)
-        return (probabilities >= self.threshold).astype(int)
+        return (self.predict_proba(X) >= self.threshold).astype(int)
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
     def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
         """
-        Evaluate the HOMER classifier using common multi-label metrics.
-
-        Metrics include:
-          - Subset Accuracy
-          - Hamming Loss
-          - Micro-averaged F1 Score
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            The input feature matrix.
-        Y : ArrayLike of shape (n_samples, n_labels)
-            The binary label matrix.
-
-        Returns
-        -------
-        metrics : dict[str, float]
-            A dictionary containing the computed evaluation
-            metrics (accuracy, hamming loss, and F1 score).
+        Evaluate the model; see ``functions.assess`` (AUC uses the scores).
         """
-        return assess(Y, self.predict(X))
+        return assess(Y, self.predict(X), self.predict_proba(X))
