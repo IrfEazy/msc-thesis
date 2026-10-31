@@ -2,7 +2,7 @@
 
 Full runs of the Kaggle notebooks (owner `irfancela`, accelerator T4). Outputs are in `runs/kaggle/<slug>/` (gitignored); durations and metrics are taken from the fetched kernel logs. Add an entry for each new full run.
 
-## 2026-10-29 to 2026-10-31 (code at 6ce51e1)
+## 2026-10-29 to 2026-10-31 (code at 197f5b5)
 | Notebook | Final version | Status | Duration | Outputs |
 |---|---|---|---|---|
 | filter | v3 | COMPLETE | 0.9 h | `models/filter.pkl`, `filter_models.pkl`, `filters_performances.csv` |
@@ -11,9 +11,9 @@ Full runs of the Kaggle notebooks (owner `irfancela`, accelerator T4). Outputs a
 | MLC_Notebook | v2 | COMPLETE | 10.5 h | `models/{System,General,Computersecurity,Software,Hardware,Operatingsystems}.pickle`, `mappings/` (35 files; 9.5 GB total) |
 
 Failures fixed on the way:
-- filter v1: `KeyError 'min_samples_split'` (final model built as RandomForest from an XGBoost search) -> 28221d3. v2: `FileNotFoundError` on the tuned filter (hard-coded `OVERWRITE = False`) -> ec0f3ed.
-- MLCGeneral/MLCCS: push rejected at the 2-session GPU limit -> 5ccfa20; v1 `LookupError` for NLTK `averaged_perceptron_tagger_eng` -> c88b939 (`setup_commands`).
-- MLC_Notebook v1: ran 10.4 h, then `ValueError` (feature count) in `System.predict` because embedders were hard-coded -> 6ce51e1.
+- filter v1: `KeyError 'min_samples_split'` (final model built as RandomForest from an XGBoost search) -> 422645b. v2: `FileNotFoundError` on the tuned filter (hard-coded `OVERWRITE = False`) -> 83b61f4.
+- MLCGeneral/MLCCS: push rejected at the 2-session GPU limit -> 911bc34; v1 `LookupError` for NLTK `averaged_perceptron_tagger_eng` -> a5bb9ff (`setup_commands`).
+- MLC_Notebook v1: ran 10.4 h, then `ValueError` (feature count) in `System.predict` because embedders were hard-coded -> 197f5b5.
 
 Results:
 - filter: tuned XGBoost test accuracy 78.95%, below some untuned combinations in `filters_performances.csv` (the comparison may not be like for like).

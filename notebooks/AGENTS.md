@@ -21,7 +21,7 @@
 - `filter` and `MultiLabelClassification*` (except SMOTE) pass `device=select_device()` (root `device.py`, env `COMPUTE_DEVICE`: auto, cpu or cuda) to every active `XGBClassifier`.
 
 ## Legacy notebook
-- `MultiLabelClassificationSMOTE.ipynb` is legacy and does not run: it imports `MultiLabelClassifier` and SMOTE helpers from `utils`, which were deliberately removed in commit 16e936a. They are recoverable from `16e936a^`, which also needed `bayes_opt`.
+- `MultiLabelClassificationSMOTE.ipynb` is legacy and does not run: it imports `MultiLabelClassifier` and SMOTE helpers from `utils`, which were deliberately removed in commit 04ce252. They are recoverable from `04ce252^`, which also needed `bayes_opt`.
 
 ## Notebook behaviour
 - `filter`: the tuned final model is an `XGBClassifier` built from `hyperopt.space_eval(space, best)` (ints cast), matching the XGBoost search.
