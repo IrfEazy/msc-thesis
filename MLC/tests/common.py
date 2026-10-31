@@ -76,3 +76,4 @@ def check_contract(test, factory):
         Yc[:, 0] = const
         Pc = factory().fit(X, Yc).predict(X)
         test.assertEqual(Pc.shape, Yc.shape)
+        test.assertTrue((Pc[:, 0] == const).all())

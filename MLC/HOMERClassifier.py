@@ -48,7 +48,8 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         Binary classifier cloned for each meta-label. None means a fresh
         ``LogisticRegression(max_iter=1000)``.
     n_clusters : int, default 2
-        Number of children per node (k of the balanced k-means). A node with
+        Number of children per node (k of the balanced k-means), at least 2
+        (fit raises ValueError otherwise). A node with
         fewer labels is split into single labels. Children have floor(n/k)
         or ceil(n/k) labels.
     threshold : float, default 0.5
@@ -96,6 +97,8 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         -------
         self : "HOMERClassifier"
         """
+        if self.n_clusters < 2:
+            raise ValueError(f"n_clusters must be at least 2, got {self.n_clusters}.")
         X = numpy.asarray(X)
         Y = numpy.asarray(Y)
         template = resolve_estimator(self.base_estimator)
@@ -164,8 +167,9 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
             node.children.append(self._build_tree(X, Y, group, template, rng))
         return node
 
-    def _traverse(self, X, node, active, out):
-        """Fill ``out`` with pruned top-down scores for the rows in ``active``."""
+    def _traverse(self, X, node, active, out, reached_out):
+        """Fill ``out`` with pruned top-down scores and ``reached_out`` with
+        the reached-leaf mask for the rows in ``active``."""
         for child, model in zip(node.children, node.models):
             idx = numpy.flatnonzero(active)
             if idx.size == 0:
@@ -175,8 +179,9 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
             reached = active & (p >= self.threshold)
             if child.is_leaf:
                 out[reached, child.labels[0]] = p[reached]
+                reached_out[reached, child.labels[0]] = True
             else:
-                self._traverse(X, child, reached, out)
+                self._traverse(X, child, reached, out, reached_out)
 
     def predict_proba(self, X: ArrayLike) -> numpy.ndarray:
         """
@@ -190,20 +195,27 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         -------
         scores : ndarray of shape (n_samples, n_labels)
         """
+        return self._scores(X)[0]
+
+    def _scores(self, X):
+        """(pruned scores, reached-leaf mask), both (n_samples, n_labels)."""
         X = numpy.asarray(X)
         out = numpy.zeros((X.shape[0], self.n_labels_))
-        self._traverse(X, self.root_, numpy.ones(X.shape[0], dtype=bool), out)
-        return out
+        reached = numpy.zeros(out.shape, dtype=bool)
+        self._traverse(X, self.root_, numpy.ones(X.shape[0], dtype=bool), out, reached)
+        return out, reached
 
     def predict(self, X: ArrayLike) -> numpy.ndarray:
         """
-        Predict labels: 1 where the pruned score is at least ``threshold``.
+        Predict labels: 1 for the labels whose leaf was reached, i.e. every
+        meta-label on the path scored at least ``threshold`` (pruned labels
+        are never predicted, even with ``threshold=0``).
 
         Returns
         -------
         Y_pred : ndarray of int, shape (n_samples, n_labels)
         """
-        return (self.predict_proba(X) >= self.threshold).astype(int)
+        return self._scores(X)[1].astype(int)
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -211,4 +223,5 @@ class HOMERClassifier(BaseEstimator, ClassifierMixin):
         """
         Evaluate the model; see ``functions.assess`` (AUC uses the scores).
         """
-        return assess(Y, self.predict(X), self.predict_proba(X))
+        scores, reached = self._scores(X)
+        return assess(Y, reached.astype(int), scores)

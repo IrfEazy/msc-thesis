@@ -82,3 +82,14 @@ def positive_score(est, X: ArrayLike) -> numpy.ndarray:
     if hasattr(est, "decision_function"):
         return numpy.asarray(est.decision_function(X), dtype=float).ravel()
     return numpy.asarray(est.predict(X), dtype=float)
+
+
+def binary_predict(est, X: ArrayLike) -> numpy.ndarray:
+    """0/1 prediction of a fitted binary estimator, shape (n,).
+
+    Score > 0.5 (see ``positive_score``) when it has ``predict_proba``, else
+    ``predict(X) == 1``.
+    """
+    if hasattr(est, "predict_proba"):
+        return (positive_score(est, X) > 0.5).astype(int)
+    return (numpy.asarray(est.predict(X)) == 1).astype(int)

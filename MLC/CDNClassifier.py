@@ -110,9 +110,15 @@ class CDNClassifier(BaseEstimator, ClassifierMixin):
         rng = numpy.random.RandomState(self.random_state)
         state = rng.randint(0, 2, size=(n, q))
         total = numpy.zeros((n, q))
+        p_feat = X.shape[1]
+        # Estimator j sees [X, all labels but j]; the buffer is allocated once
+        # and its label columns are overwritten in place at every step.
+        X_aug = numpy.empty((n, p_feat + q - 1))
+        X_aug[:, :p_feat] = X
         for iteration in range(self.n_iterations):
             for j in rng.permutation(q):
-                X_aug = numpy.hstack((X, numpy.delete(state, j, axis=1)))
+                X_aug[:, p_feat : p_feat + j] = state[:, :j]
+                X_aug[:, p_feat + j :] = state[:, j + 1 :]
                 p = positive_score(self.estimators_[j], X_aug)
                 state[:, j] = rng.random_sample(n) < p
             if iteration >= self.burn_in:

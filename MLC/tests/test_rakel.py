@@ -32,6 +32,15 @@ class RAkELTests(unittest.TestCase):
             self.assertEqual(r.predict(X).shape, Y.shape)
             self.assertEqual(any("exceeds" in str(x.message) for x in w), q < 3)
 
+    def test_k_warning_points_at_caller(self):
+        X, Y = make_data(0, n_classes=2)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            RAkELClassifier(k=5, random_state=0).fit(X, Y)
+        clip = [x for x in w if "exceeds the number of labels" in str(x.message)]
+        self.assertEqual(len(clip), 1)
+        self.assertEqual(clip[0].filename, __file__)
+
     def test_labelsets_distinct_sized_covering(self):
         X, Y = make_data(0, n_classes=7)
         r = RAkELClassifier(k=3, n_estimators=10, random_state=1).fit(X, Y)

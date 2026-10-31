@@ -2,17 +2,9 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin
 
-from ._base import fit_binary, positive_score, resolve_estimator
+from ._base import binary_predict, fit_binary, positive_score, resolve_estimator
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
-
-
-def _binary_predict(est, X) -> numpy.ndarray:
-    """0/1 prediction of a fitted binary estimator (score > 0.5 when it has
-    ``predict_proba``, else its own ``predict``)."""
-    if hasattr(est, "predict_proba"):
-        return (positive_score(est, X) > 0.5).astype(int)
-    return (numpy.asarray(est.predict(X)) == 1).astype(int)
 
 
 class CLRClassifier(BaseEstimator, ClassifierMixin):
@@ -85,18 +77,22 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         n, q = X.shape[0], self.n_labels_
         zeta = numpy.zeros((n, q), dtype=int)
         for (j, k), est in self.pairwise_estimators_.items():
-            p = _binary_predict(est, X)
+            p = binary_predict(est, X)
             zeta[:, j] += p
             zeta[:, k] += 1 - p
-        aux = numpy.column_stack([_binary_predict(e, X) for e in self.aux_estimators_])
+        aux = numpy.column_stack([binary_predict(e, X) for e in self.aux_estimators_])
         return zeta + aux, (1 - aux).sum(axis=1)
+
+    def _from_votes(self, zeta, zeta_v):
+        """(labels, scores) derived from the votes of ``_votes``."""
+        return (zeta > zeta_v[:, None]).astype(int), zeta / self.n_labels_
 
     def predict_proba(self, X: ArrayLike) -> numpy.ndarray:
         """
         Normalised vote scores zeta*(j) / q, shape (n_samples, n_labels).
         Vote fractions, not probabilities.
         """
-        return self._votes(X)[0] / self.n_labels_
+        return self._from_votes(*self._votes(X))[1]
 
     def predict(self, X: ArrayLike) -> numpy.ndarray:
         """
@@ -106,8 +102,7 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         -------
         Y_pred : ndarray of int, shape (n_samples, n_labels)
         """
-        zeta, zeta_v = self._votes(X)
-        return (zeta > zeta_v[:, None]).astype(int)
+        return self._from_votes(*self._votes(X))[0]
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
@@ -116,4 +111,5 @@ class CLRClassifier(BaseEstimator, ClassifierMixin):
         Evaluate on the given data; see ``functions.assess`` (AUC uses the
         normalised vote scores).
         """
-        return assess(Y, self.predict(X), self.predict_proba(X))
+        Y_pred, scores = self._from_votes(*self._votes(X))
+        return assess(Y, Y_pred, scores)

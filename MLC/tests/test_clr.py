@@ -1,6 +1,8 @@
 import unittest
 
 import numpy
+
+from MLC.functions import assess
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 from MLC.BRClassifier import BRClassifier
@@ -95,6 +97,16 @@ class CLRTests(unittest.TestCase):
         f_clr = f1_score(Y, P, average="micro")
         f_br = f1_score(Y, BRClassifier().fit(X, Y).predict(X), average="micro")
         self.assertLess(abs(f_clr - f_br), 0.15)
+
+    def test_evaluate_computes_votes_once(self):
+        X, Y = make_data(0)
+        clf = CLRClassifier().fit(X, Y)
+        calls = []
+        original = clf._votes
+        clf._votes = lambda X: calls.append(1) or original(X)
+        r = clf.evaluate(X, Y)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(r["accuracy"], assess(Y, clf.predict(X), clf.predict_proba(X))["accuracy"])
 
     def test_evaluate(self):
         X, Y = make_data(0)

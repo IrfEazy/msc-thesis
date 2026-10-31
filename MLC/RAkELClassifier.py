@@ -106,7 +106,7 @@ class RAkELClassifier(BaseEstimator, ClassifierMixin):
         q = Y.shape[1]
         k = min(self.k, q)
         if k < self.k:
-            warnings.warn(f"k={self.k} exceeds the number of labels; using k={k}")
+            warnings.warn(f"k={self.k} exceeds the number of labels; using k={k}", stacklevel=4)
         m = self.n_estimators if self.n_estimators is not None else 2 * q
         if m < 1:
             raise ValueError("n_estimators must be >= 1")

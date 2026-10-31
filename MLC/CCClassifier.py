@@ -2,17 +2,9 @@ import numpy
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin
 
-from ._base import fit_binary, positive_score, resolve_estimator
+from ._base import binary_predict, fit_binary, positive_score, resolve_estimator
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
-
-
-def _binary_predict(est, X) -> numpy.ndarray:
-    """0/1 prediction of a fitted binary estimator (score > 0.5 when it has
-    ``predict_proba``, else its own ``predict``)."""
-    if hasattr(est, "predict_proba"):
-        return (positive_score(est, X) > 0.5).astype(int)
-    return (numpy.asarray(est.predict(X)) == 1).astype(int)
 
 
 class CCClassifier(BaseEstimator, ClassifierMixin):
@@ -102,7 +94,7 @@ class CCClassifier(BaseEstimator, ClassifierMixin):
         X_ext = X
         for est, label in zip(self.estimators_, self.order_):
             Y_score[:, label] = positive_score(est, X_ext)
-            Y_pred[:, label] = _binary_predict(est, X_ext)
+            Y_pred[:, label] = binary_predict(est, X_ext)
             X_ext = numpy.hstack((X_ext, Y_pred[:, [label]]))
         return Y_pred, Y_score
 

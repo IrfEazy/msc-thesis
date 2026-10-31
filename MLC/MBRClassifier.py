@@ -3,17 +3,9 @@ from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.model_selection import KFold, StratifiedKFold
 
-from ._base import fit_binary, positive_score, resolve_estimator
+from ._base import binary_predict, fit_binary, positive_score, resolve_estimator
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
-
-
-def _binary_predict(est, X) -> numpy.ndarray:
-    """0/1 prediction of a fitted binary estimator (score > 0.5 when it has
-    ``predict_proba``, else its own ``predict``)."""
-    if hasattr(est, "predict_proba"):
-        return (positive_score(est, X) > 0.5).astype(int)
-    return (numpy.asarray(est.predict(X)) == 1).astype(int)
 
 
 class MBRClassifier(BaseEstimator, ClassifierMixin):
@@ -35,7 +27,11 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
     cv : int or None, default 5
         Number of folds for the out-of-fold stage-1 scores (shuffled
         StratifiedKFold when the label has at least ``cv`` samples in each
-        class, else KFold). None uses legacy in-sample stage-1 scores.
+        class, else KFold). None is the legacy variant: in-sample stage-1
+        scores (optimistic meta features). Must be at least 2, and fit raises
+        ValueError when there are fewer samples than ``cv``. Cost: with an
+        integer ``cv`` stage 1 takes ``cv + 1`` fits per label (``cv``
+        out-of-fold fits plus the final refit on all data).
     random_state : int or None, default None
         Seed of the fold shuffling.
 
@@ -93,6 +89,13 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         X = numpy.asarray(X)
         Y = numpy.asarray(Y)
         q = Y.shape[1]
+        if self.cv is not None:
+            if not isinstance(self.cv, (int, numpy.integer)) or self.cv < 2:
+                raise ValueError(f"cv must be None or an integer >= 2, got {self.cv!r}.")
+            if X.shape[0] < self.cv:
+                raise ValueError(
+                    f"cv={self.cv} needs at least {self.cv} samples, got {X.shape[0]}."
+                )
         base = resolve_estimator(self.base_estimator)
         meta = resolve_estimator(self.meta_estimator)
 
@@ -129,7 +132,7 @@ class MBRClassifier(BaseEstimator, ClassifierMixin):
         Y_pred : ndarray of int, shape (n_samples, n_labels)
         """
         X_meta = self._meta_features(X)
-        return numpy.column_stack([_binary_predict(e, X_meta) for e in self.meta_estimators_])
+        return numpy.column_stack([binary_predict(e, X_meta) for e in self.meta_estimators_])
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")

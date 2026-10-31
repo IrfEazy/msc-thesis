@@ -43,6 +43,15 @@ class MBRTests(unittest.TestCase):
         P = MBRClassifier(random_state=0).fit(X, Y).predict(X)
         self.assertEqual(P.shape, Y.shape)
 
+    def test_too_few_samples_or_bad_cv(self):
+        X, Y = make_data(0, n_samples=60)
+        with self.assertRaises(ValueError):
+            MBRClassifier(cv=5).fit(X[:4], Y[:4])
+        for cv in (1, 0, 2.5):
+            with self.assertRaises(ValueError):
+                MBRClassifier(cv=cv).fit(X, Y)
+        MBRClassifier(cv=None).fit(X[:4], Y[:4])  # legacy variant needs no folds
+
     def test_evaluate(self):
         X, Y = make_data(0)
         r = MBRClassifier(random_state=0).fit(X, Y).evaluate(X, Y)
