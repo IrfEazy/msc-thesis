@@ -1,38 +1,52 @@
 import numpy
-from itertools import combinations
 from numpy.typing import ArrayLike
-from sklearn.base import BaseEstimator, ClassifierMixin, clone
-from sklearn.linear_model import LogisticRegression
-from typing import cast, TypeVar
+from sklearn.base import BaseEstimator, ClassifierMixin
 
+from .LPClassifier import LPClassifier
 from .functions import assess
 from .preconditions import check_same_rows, check_binary_matrices
 
 
 class PStClassifier(BaseEstimator, ClassifierMixin):
+    """Pruned Sets: Label Powerset after pruning rare labelsets (Read et al.
+    2008, as described by Bogatinovski et al. 2022).
+
+    A labelset is frequent when it occurs at least ``pruning_value`` times in
+    the training data. Rows with a frequent labelset are kept. Each pruned
+    row is reintroduced once per kept subset: its frequent, non-empty, proper
+    sub-labelsets are ranked by count (descending), size (descending) and then
+    lexicographically, and the top ``max_reintroduced`` become new rows with
+    the same features. A pruned row without a frequent proper subset is
+    dropped. An LP classifier is then trained on the result. When every
+    labelset occurs at least ``pruning_value`` times, nothing is pruned and
+    PSt equals LP.
+
+    Parameters
+    ----------
+    base_estimator : estimator, default None
+        Multi-class classifier for the LP step (None: LogisticRegression).
+    pruning_value : int, default 2
+        Minimum labelset count p to be frequent (count >= p).
+    max_reintroduced : int, default 1
+        Maximum number b of subsets reintroduced per pruned row.
+
+    Attributes
+    ----------
+    lp_ : fitted LPClassifier
+    n_labels_ : int
+
+    Raises
+    ------
+    ValueError
+        On fit, if no row has a frequent labelset (lower ``pruning_value``).
+    """
+
     def __init__(
         self,
-        base_estimator: ClassifierMixin = LogisticRegression(max_iter=1000),
+        base_estimator: ClassifierMixin | None = None,
         pruning_value: int = 2,
         max_reintroduced: int = 1,
     ):
-        """
-        Initialize the Pruned Sets classifier.
-
-        Parameters
-        ----------
-        base_estimator : ClassifierMixin
-            The multi-class classifier used on the transformed problem.
-        pruning_value : int
-            The minimum frequency required for a label-set to be considered frequent.
-        max_reintroduced : int
-            The maximal number of frequent label-sets to reintroduce per infrequent example.
-        """
-        self.class_label_matrix_ = None
-        self.classifier_ = None
-        self.class_to_label_ = None
-        self.label_to_class_ = None
-        self.n_labels_ = None
         self.base_estimator = base_estimator
         self.pruning_value = pruning_value
         self.max_reintroduced = max_reintroduced
@@ -41,165 +55,72 @@ class PStClassifier(BaseEstimator, ClassifierMixin):
     @check_binary_matrices("Y")
     def fit(self, X: ArrayLike, Y: ArrayLike) -> "PStClassifier":
         """
-        Fit the Pruned Sets classifier.
-
-        The training process includes:
-          1. Counting label-set frequencies and determining which are frequent.
-          2. Pruning infrequent label-sets.
-          3. For each infrequent example, generating candidate frequent subsets (up to max_reintroduced per example)
-             and adding them to the training set.
-          4. Transforming the multi-label problem into a multi-class problem and training the classifier.
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            The input feature matrix.
-        Y : ArrayLike of shape (n_samples, n_labels)
-            The binary indicator matrix for labels.
+        Prune rare labelsets, reintroduce their frequent subsets and fit LP.
 
         Returns
         -------
         self : "PStClassifier"
-            Fitted estimator.
         """
+        if self.pruning_value < 1:
+            raise ValueError("pruning_value must be >= 1")
+        if self.max_reintroduced < 0:
+            raise ValueError("max_reintroduced must be >= 0")
+        X = numpy.asarray(X)
+        Y = numpy.asarray(Y).astype(int)
+        sets, inverse, counts = numpy.unique(
+            Y, axis=0, return_inverse=True, return_counts=True
+        )
+        inverse = numpy.asarray(inverse).ravel()
+        frequent = counts >= self.pruning_value
+        if not frequent.any():
+            raise ValueError(
+                f"no labelset occurs at least pruning_value={self.pruning_value} "
+                f"times (maximum count {counts.max()}); use a lower pruning_value"
+            )
+        # Frequent non-empty labelsets, ranked: count desc, size desc, lexicographic.
+        cands = [
+            (-int(counts[i]), -int(sets[i].sum()), tuple(sets[i]), i)
+            for i in numpy.flatnonzero(frequent)
+            if sets[i].sum() > 0
+        ]
+        cands.sort(key=lambda c: c[:3])
+
+        keep_rows, new_rows, new_sets = [], [], []
+        for r in range(Y.shape[0]):
+            cls = inverse[r]
+            if frequent[cls]:
+                keep_rows.append(r)
+                continue
+            row = Y[r]
+            taken = 0
+            for _, _, _, i in cands:
+                if taken >= self.max_reintroduced:
+                    break
+                s = sets[i]
+                if s.sum() < row.sum() and (s <= row).all():
+                    new_rows.append(r)
+                    new_sets.append(s)
+                    taken += 1
+        X_new = numpy.concatenate([X[keep_rows], X[new_rows]]) if new_rows else X[keep_rows]
+        Y_new = (
+            numpy.concatenate([Y[keep_rows], numpy.array(new_sets)])
+            if new_rows
+            else Y[keep_rows]
+        )
         self.n_labels_ = Y.shape[1]
-
-        # Convert each label vector to a tuple to serve as a dictionary key.
-        label_tuples = [tuple(row) for row in Y]
-
-        # Count frequency of each label-set.
-        freq_dict = {}
-        for lt in label_tuples:
-            freq_dict[lt] = freq_dict.get(lt, 0) + 1
-
-        # Identify frequent label-sets.
-        frequent_label_sets = {
-            lt for lt, count in freq_dict.items() if count >= self.pruning_value
-        }
-
-        # Build new training data: (X_new, Y_new)
-        X_new = []
-        Y_new = []
-
-        for i, lt in enumerate(label_tuples):
-            if lt in frequent_label_sets:
-                # Keep examples with frequent label-sets.
-                X_new.append(X[i])
-                Y_new.append(lt)
-            else:
-                # For infrequent examples, attempt to reintroduce by generating frequent subsets.
-                # Identify indices with a positive label.
-                positive_indices = [j for j, val in enumerate(lt) if val == 1]
-                candidate_subsets = set()
-                # Generate all proper non-empty subsets.
-                for r in range(1, len(positive_indices)):
-                    for subset in combinations(positive_indices, r):
-                        candidate = [0] * self.n_labels_
-                        for j in subset:
-                            candidate[j] = 1
-                        candidate_subsets.add(tuple(candidate))
-                # Retain only those candidate subsets that are frequent.
-                frequent_candidates = [
-                    cand for cand in candidate_subsets if cand in frequent_label_sets
-                ]
-                # Reintroduce up to max_reintroduced examples from these candidates.
-                count = 0
-                for cand in frequent_candidates:
-                    if count >= self.max_reintroduced:
-                        break
-                    X_new.append(X[i])
-                    Y_new.append(cand)
-                    count += 1
-
-        X_new = numpy.array(X_new)
-        # Y_new is a list of tuples.
-
-        # Map each unique label-set in Y_new to a unique class index.
-        unique_label_sets = list(set(Y_new))
-        self.label_to_class_ = {lt: idx for idx, lt in enumerate(unique_label_sets)}
-        self.class_to_label_ = {
-            idx: numpy.array(lt) for lt, idx in self.label_to_class_.items()
-        }
-
-        # Transform multi-label targets into multi-class targets.
-        Y_transformed = numpy.array([self.label_to_class_[lt] for lt in Y_new])
-
-        # Train the multi-class classifier.
-        T = TypeVar("T", bound=ClassifierMixin)
-        self.classifier_: T = cast(T, clone(self.base_estimator))
-        self.classifier_.fit(X_new, Y_transformed)
-
-        # Precompute the label matrix for each class (used in predict_proba).
-        n_classes = len(self.class_to_label_)
-        self.class_label_matrix_ = numpy.zeros((n_classes, self.n_labels_), dtype=int)
-        for class_idx, label_arr in self.class_to_label_.items():
-            self.class_label_matrix_[class_idx, :] = label_arr
+        self.lp_ = LPClassifier(self.base_estimator).fit(X_new, Y_new)
         return self
 
-    def predict(self, X: ArrayLike) -> ArrayLike:
-        """
-        Predict multi-label outputs for the given data.
+    def predict(self, X: ArrayLike) -> numpy.ndarray:
+        """Predict a retained labelset per sample; int array (n, n_labels)."""
+        return self.lp_.predict(X)
 
-        Each instance is assigned a class by the multi-class classifier, and this class is mapped
-        back to its corresponding label-set.
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            The input feature matrix.
-
-        Returns
-        -------
-        Y_pred : ArrayLike of shape (n_samples, n_labels)
-            The predicted binary label matrix.
-        """
-        Y_class_pred = self.classifier_.predict(X)
-        Y_pred = numpy.array([self.class_to_label_[cls] for cls in Y_class_pred])
-        return Y_pred
-
-    def predict_proba(self, X: ArrayLike) -> ArrayLike:
-        """
-        Predict marginal probabilities for each label.
-
-        The multi-class classifier outputs probabilities for each class.
-        Marginal probability for a label is computed by summing the probabilities of all classes
-        whose associated label-set has that label present.
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            The input feature matrix.
-
-        Returns
-        -------
-        Y_proba : ArrayLike of shape (n_samples, n_labels)
-            The estimated probabilities for each label.
-        """
-        proba = self.classifier_.predict_proba(X)  # shape: (n_samples, n_classes)
-        Y_proba = numpy.dot(proba, self.class_label_matrix_)
-        return Y_proba
+    def predict_proba(self, X: ArrayLike) -> numpy.ndarray:
+        """Marginal label probabilities of the LP step, shape (n, n_labels)."""
+        return self.lp_.predict_proba(X)
 
     @check_same_rows("X", "Y")
     @check_binary_matrices("Y")
     def evaluate(self, X: ArrayLike, Y: ArrayLike) -> dict[str, float]:
-        """
-        Evaluate the Pruned Sets classifier using standard multi-label metrics.
-
-        Metrics computed include:
-          - Subset Accuracy
-          - Hamming Loss
-          - Micro-averaged F1 Score
-
-        Parameters
-        ----------
-        X : ArrayLike of shape (n_samples, n_features)
-            The input feature matrix.
-        Y : ArrayLike of shape (n_samples, n_labels)
-            The true binary label matrix.
-
-        Returns
-        -------
-        metrics : dict[str, float]
-            A dictionary containing accuracy, hamming loss, and micro F1 score.
-        """
-        return assess(Y, self.predict(X))
+        """Evaluate with ``functions.assess`` (AUC from ``predict_proba``)."""
+        return assess(Y, self.predict(X), self.predict_proba(X))
