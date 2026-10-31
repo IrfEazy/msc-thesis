@@ -375,65 +375,70 @@ def preprocess_texts(list_str, model_path, embedding_dim):
     return list_embedded_str
 
 
+def _finite_or_none(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if np.isfinite(value) else None
+
+
 def extract_models(classes, models, performance):
+    """
+    Pick, for every label, the candidate with the best validation metric.
+
+    Rule (deterministic, independent of dict insertion order): candidates are
+    ranked per label by (1) the ``performance`` metric of that label, higher is
+    better; (2) ties by the macro-average F1 of the candidate
+    (``report["macro avg"]["f1-score"]``); (3) remaining ties by the smallest
+    candidate name (``str``). A NaN or missing metric never wins over a finite
+    one; if every candidate is NaN for a label, the tie-break keys alone decide.
+
+    Returns ``{"<idx>": {"name", "performance", "model"}}``.
+    """
     attack_models = {}
     for idx in range(len(classes)):
+        best_key = None
         best_model = {}
         for model_name in models:
-            temp_performance = models[model_name]["assess"]["report"][f"{idx}"][
-                performance
-            ]
-            if len(best_model) == 0:
-                best_model["name"] = model_name
-                best_model["performance"] = temp_performance
-                best_model["model"] = models[model_name]["model"]
-            else:
-                if best_model["performance"] < temp_performance:
-                    best_model["name"] = model_name
-                    best_model["performance"] = temp_performance
-                    best_model["model"] = models[model_name]["model"]
+            report = models[model_name]["assess"]["report"]
+            temp_performance = report[f"{idx}"][performance]
+            metric = _finite_or_none(temp_performance)
+            macro = _finite_or_none(report.get("macro avg", {}).get("f1-score", None))
+            key = (
+                metric is not None,
+                metric if metric is not None else 0.0,
+                macro is not None,
+                macro if macro is not None else 0.0,
+            )
+            name = str(model_name)
+            if (
+                best_key is None
+                or key > best_key
+                or (key == best_key and name < str(best_model["name"]))
+            ):
+                best_key = key
+                best_model = {
+                    "name": model_name,
+                    "performance": temp_performance,
+                    "model": models[model_name]["model"],
+                }
         attack_models[f"{idx}"] = best_model
     return attack_models
 
 
-def assess(Y: ArrayLike, Y_pred: ArrayLike) -> dict[str, float]:
+def assess(
+    Y: ArrayLike, Y_pred: ArrayLike, Y_score: ArrayLike | None = None
+) -> dict[str, float]:
     """
-    Evaluate the model on the given data.
+    Evaluate multi-label predictions; delegates to ``MLC.functions.assess``.
 
-    Parameters
-    ----------
-    Y : ArrayLike of shape (n_samples, n_labels)
-        The input features.
-    Y_pred : ArrayLike of shape (n_samples, n_labels)
-        The true binary label matrix.
-
-    Returns
-    -------
-    metrics : dict[str, float]
-        Dictionary containing accuracy, micro F1 score, and hamming loss.
+    ``accuracy`` is subset accuracy (all labels of a sample must be correct).
+    AUC is computed from ``Y_score`` when given, otherwise from the hard
+    ``Y_pred`` (degenerate, single operating point). Labels whose true column
+    has a single class get AUC NaN instead of raising. See
+    ``MLC.functions.assess`` for the full semantics.
     """
-    accuracy = accuracy_score(Y, Y_pred)
+    from MLC.functions import assess as _assess
 
-    auc_score_micro = roc_auc_score(Y, Y_pred, average="micro")
-    auc_score_macro = roc_auc_score(Y, Y_pred, average="macro")
-    auc_score_weighted = roc_auc_score(Y, Y_pred, average="weighted")
-    auc_score_samples = roc_auc_score(Y, Y_pred, average="samples")
-    auc_per_label = roc_auc_score(Y, Y_pred, average=None)
-
-    report = classification_report(Y, Y_pred, output_dict=True, zero_division=0.0)
-    report["micro avg"]["auc"] = auc_score_micro
-    report["macro avg"]["auc"] = auc_score_macro
-    report["weighted avg"]["auc"] = auc_score_weighted
-    report["samples avg"]["auc"] = auc_score_samples
-
-    n_classes = Y.shape[1]
-    class_names = [f"{i}" for i in range(n_classes)]
-    for i, target in enumerate(class_names):
-        if target in report:
-            report[target]["auc"] = auc_per_label[i]
-        else:
-            # In case labels are not printed per class, you can store them separately
-            report[target] = {"auc": auc_per_label[i]}
-
-    hamming = hamming_loss(Y, Y_pred)
-    return {"accuracy": accuracy, "hamming_loss": hamming, "report": report}
+    return _assess(Y, Y_pred, Y_score)
