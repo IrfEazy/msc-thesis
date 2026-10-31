@@ -6,7 +6,7 @@ and the `[notebooks.kaggle]` subtables of the manifest (default: experiments.tom
 only executes it. Kaggle credentials are never read: the Kaggle CLI uses the user's own config.
 
   uv run python scripts/kaggle_bundle.py build [--out DIR] [--only NAME] [--smoke]
-  uv run python scripts/kaggle_bundle.py push [--out DIR] [--only NAME] [--smoke] [--dry-run]
+  uv run python scripts/kaggle_bundle.py push [--out DIR] [--only NAME] [--smoke] [--dry-run] [--force]
   uv run python scripts/kaggle_bundle.py status [--only NAME] [--smoke]
   uv run python scripts/kaggle_bundle.py fetch [--only NAME] [--smoke] [--out DIR]
 """
@@ -182,6 +182,39 @@ def kernel_slug(entry, smoke):
     return entry["kaggle"]["slug"] + (SMOKE_SUFFIX if smoke else "")
 
 
+def is_gpu(entry):
+    """GPU kernel iff the notebook's accelerator is "gpu"; "none" or absent means a CPU kernel."""
+    acc = str(entry["kaggle"].get("accelerator", "none")).lower()
+    if acc not in ("gpu", "none"):
+        sys.exit(f"{entry['name']}: accelerator must be 'gpu' or 'none', got {acc!r}")
+    return acc == "gpu"
+
+
+def source_refs(cfg, manifest, entry):
+    """`kernels` of the entry as owner/slug refs (manifest slugs are owner-prefixed, owner/slug kept)."""
+    own = {n["kaggle"]["slug"] for n in manifest["notebooks"] if "kaggle" in n}
+    refs = []
+    for r in entry["kaggle"].get("kernels", []):
+        if "/" not in r:
+            if r not in own:
+                sys.exit(f"{entry['name']}: kernels entry {r!r} is not a manifest kernel slug (use owner/slug for others)")
+            r = f"{cfg['owner']}/{r}"
+        if r == f"{cfg['owner']}/{entry['kaggle']['slug']}":
+            sys.exit(f"{entry['name']}: kernel cannot list itself in kernels")
+        refs.append(r)
+    return refs
+
+
+def check_unique_slugs(manifest):
+    seen = {}
+    for n in manifest["notebooks"]:
+        if "kaggle" in n:
+            slug = n["kaggle"]["slug"]
+            if slug in seen:
+                sys.exit(f"kernel slug {slug!r} used by both {seen[slug]!r} and {n['name']!r}")
+            seen[slug] = n["name"]
+
+
 def code_modules(cfg):
     mods = []
     for p in cfg["code_paths"]:
@@ -248,7 +281,7 @@ def check_placeholders(entry, slugs):
     for t in texts:
         for s in PLACEHOLDER.findall(t):
             if s not in slugs:
-                sys.exit(f"{entry['name']}: {{input:{s}}} is not an attached dataset ({sorted(slugs)})")
+                sys.exit(f"{entry['name']}: {{input:{s}}} is not an attached dataset or kernel ({sorted(slugs)})")
 
 
 def setup_commands(cfg, entry):
@@ -263,10 +296,10 @@ def setup_commands(cfg, entry):
     return out
 
 
-def bootstrap_source(cfg, entry, cfg_extra):
+def bootstrap_source(cfg, entry, cfg_extra, sources=()):
     k = entry["kaggle"]
     datasets = k["datasets"]
-    slugs = [d.split("/", 1)[1] for d in datasets]
+    slugs = [d.split("/", 1)[1] for d in datasets] + [r.split("/", 1)[1] for r in sources]
     k = {**k, "setup_commands": setup_commands(cfg, entry)}
     check_placeholders({**entry, "kaggle": k}, slugs)
     code_ref = f"{cfg['owner']}/{cfg['code_dataset']}"
@@ -284,14 +317,14 @@ def bootstrap_source(cfg, entry, cfg_extra):
     return f"{BOOTSTRAP_HEADER}\nimport json\nCFG = json.loads({json.dumps(conf)!r})\n" + BOOTSTRAP_BODY
 
 
-def build_kernel(cfg, entry, out, smoke):
+def build_kernel(cfg, entry, out, smoke, sources=()):
     k = entry["kaggle"]
     slug = kernel_slug(entry, smoke)
     kdir = out / "kernels" / slug
     if kdir.exists():
         shutil.rmtree(kdir)
     cells = [nbformat.v4.new_code_cell(
-        bootstrap_source(cfg, entry, {"modules": code_modules(cfg)}))]
+        bootstrap_source(cfg, entry, {"modules": code_modules(cfg)}, sources))]
     if smoke:
         cells.append(nbformat.v4.new_code_cell(SMOKE_BODY.lstrip("\n")))
     else:
@@ -310,9 +343,9 @@ def build_kernel(cfg, entry, out, smoke):
     write_json(kdir / "kernel-metadata.json", {
         "id": f"{cfg['owner']}/{slug}", "title": slug, "code_file": code_file,
         "language": "python", "kernel_type": "notebook", "is_private": True,
-        "enable_gpu": k.get("accelerator") == "gpu", "enable_tpu": False,
+        "enable_gpu": is_gpu(entry), "enable_tpu": False,
         "enable_internet": bool(k.get("internet", True)),
-        "dataset_sources": k["datasets"], "competition_sources": [], "kernel_sources": [],
+        "dataset_sources": k["datasets"], "competition_sources": [], "kernel_sources": list(sources),
         "model_sources": [],
     })
     return kdir
@@ -321,10 +354,11 @@ def build_kernel(cfg, entry, out, smoke):
 def cmd_build(args, manifest, cfg):
     out = Path(args.out or cfg["build_dir"])
     out = out if out.is_absolute() else REPO / out
+    check_unique_slugs(manifest)
     entries = selected(manifest, args.only)
     build_datasets(cfg, out)
     for e in entries:
-        print("kernel:", build_kernel(cfg, e, out, args.smoke).relative_to(out))
+        print("kernel:", build_kernel(cfg, e, out, args.smoke, source_refs(cfg, manifest, e)).relative_to(out))
     print(f"built {len(entries)} kernel(s) and 2 datasets in {out}")
     return 0
 
@@ -367,9 +401,12 @@ def wait_dataset_ready(ref, timeout, interval=15):
 def cmd_push(args, manifest, cfg):
     out = Path(args.out or cfg["build_dir"])
     out = out if out.is_absolute() else REPO / out
+    check_unique_slugs(manifest)
     entries = selected(manifest, args.only)
     if not (out / "datasets").is_dir():
         sys.exit(f"nothing built in {out}; run `build` first")
+    if not (args.dry_run or args.force):
+        check_sources_complete(cfg, manifest, entries)
     sha = rn.git("rev-parse", "--short", "HEAD") or "unknown"
     if not args.kernels_only:
         for sub, slug in (("code", cfg["code_dataset"]), ("data", cfg["data_dataset"])):
@@ -387,36 +424,44 @@ def cmd_push(args, manifest, cfg):
             if not wait_dataset_ready(ref, timeout):
                 print(f"error: dataset {ref} not ready after {timeout}s; aborting before kernel pushes", file=sys.stderr)
                 return 1
-    gpu = bool(cfg.get("accelerator"))
-    limit = int(cfg.get("max_gpu_sessions", 2))
     interval = int(cfg.get("gpu_poll_interval", 60))
-    pushed, failed = [], []
-    # Every kernel ref of the manifest (full and smoke), so sessions still running from
+    limits = {True: int(cfg.get("max_gpu_sessions", 2)),
+              False: int(cfg["max_cpu_sessions"]) if "max_cpu_sessions" in cfg else None}
+    pushed, failed = {True: [], False: []}, []
+    # Every kernel ref of the manifest (full and smoke) per kind, so sessions still running from
     # earlier invocations count toward the limit.
-    known = {f"{cfg['owner']}/{kernel_slug(n, sm)}"
-             for n in selected(manifest, None) for sm in (False, True)}
+    known = {kind: {f"{cfg['owner']}/{kernel_slug(n, sm)}"
+                    for n in selected(manifest, None) if is_gpu(n) == kind for sm in (False, True)}
+             for kind in (True, False)}
     for e in entries:
         slug = kernel_slug(e, args.smoke)
         kdir = out / "kernels" / slug
         if not kdir.is_dir():
             sys.exit(f"{kdir} not built; run `build{' --smoke' if args.smoke else ''}` first")
+        gpu = is_gpu(e)
+        limit = limits[gpu]
+        wait = limit is not None and not args.no_wait
+        kind = "GPU" if gpu else "CPU"
         cmd = ["kaggle", "kernels", "push", "-p", str(kdir)]
-        if gpu:
+        if gpu and cfg.get("accelerator"):
             cmd += ["--accelerator", cfg["accelerator"]]
         if args.dry_run:
             run_cmd(cmd, True)
+            srcs = source_refs(cfg, manifest, e)
+            if srcs:
+                print(f"# {slug}: kernel_sources {', '.join(srcs)} (must be COMPLETE before a real push)")
             continue
         while True:
-            if gpu and not args.no_wait:
-                wait_gpu_slot(sorted(known | set(pushed)), limit, interval)
+            if wait:
+                wait_slot(sorted(known[gpu] | set(pushed[gpu])), limit, interval, kind)
             result = push_kernel(cmd)
-            if result == "limit" and gpu and not args.no_wait:
-                print(f"GPU session limit reported; retrying in {interval}s")
+            if result == "limit" and wait:
+                print(f"{kind} session limit reported; retrying in {interval}s")
                 time.sleep(interval)
                 continue
             break
         if result == "ok":
-            pushed.append(f"{cfg['owner']}/{slug}")
+            pushed[gpu].append(f"{cfg['owner']}/{slug}")
         else:
             failed.append(slug)
     if failed:
@@ -426,13 +471,14 @@ def cmd_push(args, manifest, cfg):
 
 
 def push_kernel(cmd):
-    """Run a kernel push; "ok", "limit" (GPU session limit reached) or "fail"."""
+    """Run a kernel push; "ok", "limit" (session limit reached) or "fail"."""
     print("$", " ".join(cmd))
     r = subprocess.run(cmd, capture_output=True, text=True)
     text = (r.stdout or "") + (r.stderr or "")
     if text.strip():
         print(text.rstrip())
-    if "maximum batch gpu session" in text.lower():
+    low = text.lower()
+    if "maximum batch" in low and "session" in low:
         return "limit"
     if r.returncode != 0 or "error" in text.lower():
         print(f"error: kernel push failed (rc={r.returncode})", file=sys.stderr)
@@ -440,23 +486,59 @@ def push_kernel(cmd):
     return "ok"
 
 
+def parse_kernel_status(text):
+    """Status token of `kaggle kernels status` output, lower-case, or None if unparseable.
+
+    >>> parse_kernel_status('irfancela/msc-thesis-complete has status "KernelWorkerStatus.RUNNING"')
+    'running'
+    >>> parse_kernel_status('a/b has status "COMPLETE"')
+    'complete'
+    >>> parse_kernel_status('irfancela/msc-thesis-complete: unknown') is None
+    True
+    """
+    m = re.search(r'has status "(?:KernelWorkerStatus\.)?(\w+)"', text or "", re.I)
+    return m.group(1).lower() if m else None
+
+
+def kernel_status(ref):
+    r = subprocess.run(["kaggle", "kernels", "status", ref], capture_output=True, text=True)
+    return parse_kernel_status(r.stdout) if r.returncode == 0 else None
+
+
 def active_sessions(refs):
-    """Number of the given kernels whose status is RUNNING or QUEUED (failing calls count as inactive)."""
+    """Number of the given kernels whose status is RUNNING or QUEUED (failing or unparseable calls count as inactive, with a warning)."""
     n = 0
     for ref in refs:
-        r = subprocess.run(["kaggle", "kernels", "status", ref], capture_output=True, text=True)
-        up = (r.stdout or "").upper()
-        if r.returncode == 0 and ("RUNNING" in up or "QUEUED" in up):
+        st = kernel_status(ref)
+        if st is None:
+            print(f"warning: could not read status of {ref}; counting it as inactive")
+        elif st in ("running", "queued"):
             n += 1
     return n
 
 
-def wait_gpu_slot(refs, limit, interval):
+def kernel_complete(ref):
+    return kernel_status(ref) == "complete"
+
+
+def check_sources_complete(cfg, manifest, entries):
+    """Refuse to push a kernel whose kernel_sources are not COMPLETE on Kaggle (never auto-chain)."""
+    bad = []
+    for e in entries:
+        for ref in source_refs(cfg, manifest, e):
+            if not kernel_complete(ref):
+                bad.append(f"{e['name']} needs {ref}")
+    if bad:
+        sys.exit("error: source kernel(s) not COMPLETE on Kaggle: " + "; ".join(bad)
+                 + ". Wait for them (status), or pass --force to push anyway.")
+
+
+def wait_slot(refs, limit, interval, kind="GPU"):
     while True:
         n = active_sessions(refs)
         if n < limit:
             return
-        print(f"waiting for a GPU session slot: {n}/{limit} running or queued; next check in {interval}s")
+        print(f"waiting for a {kind} session slot: {n}/{limit} running or queued; next check in {interval}s")
         time.sleep(interval)
 
 
@@ -491,7 +573,8 @@ def main(argv=None):
             p.add_argument("--out")
         if name == "push":
             p.add_argument("--dry-run", action="store_true")
-            p.add_argument("--no-wait", action="store_true", help="do not wait for free GPU sessions")
+            p.add_argument("--no-wait", action="store_true", help="do not wait for free sessions")
+            p.add_argument("--force", action="store_true", help="push even if source kernels are not COMPLETE")
             p.add_argument("--kernels-only", action="store_true", help="skip dataset create/version")
         p.set_defaults(fn=fn)
     args = ap.parse_args(argv)

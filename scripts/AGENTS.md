@@ -3,6 +3,7 @@
 - Usage of `run_notebooks.py`, `kaggle_bundle.py` and `export_kaggle_requirements.py` is in root `AGENTS.md` (Environment, Notebook runner, Kaggle bundles sections). This file covers operating Kaggle runs.
 
 ## Running Kaggle kernels
+- Chained kernels (`kernels = [...]`): push the source, wait for COMPLETE (`status`), then push the dependent; `push` refuses otherwise unless `--force`. CPU kernels (`accelerator` none/absent) spend no GPU quota.
 - Full pushes spend the weekly GPU quota (about 30 h; 12 h per session; `max_gpu_sessions = 2` in `experiments.toml`). Push full kernels only when the user asks, and in the order the user sets.
 - After changing a notebook or the bootstrap: `build`, then `push --only NAME --kernels-only` (cells are embedded in the kernel; datasets are unchanged). Relaunch only the kernel that failed.
 - Kernels run on Kaggle, not locally: closing the terminal or WSL does not stop them. A local wait-then-fetch loop dies with WSL; re-check `status` and restart the loop instead of pushing again.
