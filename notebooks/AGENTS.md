@@ -5,6 +5,12 @@
 - `filter` -> `Train-Test split` -> `MultiLabelClassification<Level>` per hierarchy level (base, Computer, ComputerNetworking, ComputerSecurity, Hardware, OperatingSystems, Software, SMOTE variant) -> `SystemLabelAssignment`.
 - Alternative one-step branch: `MLC_Notebook`, `MLCGeneral`, `MLCCS`, built on the `MLC` package.
 
+## Shared pipeline library (leakage-free rebuild)
+- Every notebook and the System must use these modules (pure; no nltk or embedder imports; tests in `notebooks/tests`), not their own cleaning, label mapping or splitting:
+  - `textprep.py`: `preprocess_text` (thesis rule: remove URLs, emails, `@mentions`, `#hashtags`; collapse whitespace; nothing else) and `group_key` (duplicate identity: lowercased, punctuation removed, one leading `rt` stripped); bump `TEXTPREP_VERSION` when output changes.
+  - `taxonomy.toml` + `taxonomy.py`: thesis hierarchy and Watson node -> label mapping (edit the TOML, not code); `watson_list`, `top_labels(wl, relevant, "two_step"|"one_step")`, `sub_labels(wl, parent)` (sub-level `other` is internal, dropped from System output), `classes(level)` (fixed order), `taxonomy_sha256`. One-step `other` covers irrelevant posts AND relevant posts without a mapped category: never derive relevance from it.
+  - `splits.py`: one grouped, stratified train/test split with grouped inner folds for all stages. Groups = `group_key` plus prefix merging of truncated copies (`min_prefix`, default 40; `max_group_rows` cap fails closed). `build_split` (raises on an empty test split or inner fold), `write_manifest`/`read_manifest` (CSV + JSON sidecar), `verify_manifest` (call it before using a manifest, with the pinned `expected_seed` and `expected_manifest_sha256`; it recomputes grouping and rebuilds), `assign_split`, `balance_report` (per-label support by split and inner fold, rows and groups), and `frequent_labelsets` (the thesis >=20 label-set rule, computed on each fitting partition: inner-train folds for selection, full train for the refit).
+
 ## Imports
 - `filter`, `Train-Test split`: `notebooks.utils`; `MLC_Notebook`, `MLCGeneral`, `MLCCS`: `MLC`, `notebooks.utils` and `notebooks.checkpoints` (checkpoint store; repo root must be on `sys.path`, as the Kaggle bootstrap does).
 - `MultiLabelClassification*` and `SystemLabelAssignment`: root `utils` and `preprocess_functions` (SMOTE variant: `utils` only).

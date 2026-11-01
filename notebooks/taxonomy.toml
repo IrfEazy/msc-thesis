@@ -1,0 +1,73 @@
+# Thesis label taxonomy (thesis/Methodology.tex, Two-Step System, lines 69-79).
+# Loaded by notebooks/taxonomy.py; every notebook and the System must use it.
+#
+# Labels are lowercase Watson node names. A post's Watson categories are paths such as
+# "/technology and computing/hardware/computer/servers"; every node on every path is in
+# its watson_list, so a deeper node always brings its ancestors with it. Only the node
+# names listed under `watson` below produce labels.
+#
+# Derived from the old CATEGORIES_MAPPING (notebooks/Train-Test split.ipynb, cell 6) and
+# MLC_Notebook SYSTEM_MODULES, restricted to the thesis hierarchy. Not labels any more:
+# "servers", "portable computer", "desktop computer" (under hardware/computer) and
+# "router", "wireless technology" (under hardware/computer networking). Their ancestors
+# ("computer", "computer networking", "hardware") are still in the watson_list, so such a
+# post keeps those labels.
+#
+# Changing this file changes taxonomy_sha256() and invalidates existing split manifests.
+
+# Label for "none of the classes of this level". Top level: a real thesis class
+# ("Other"). Sub levels: internal only ("none of the subcategories"); the System drops it,
+# because the thesis keeps such a post "in the high-level category".
+other = "other"
+
+[top]
+# Fixed class order (sorted; equals MultiLabelBinarizer order). Must contain `other`.
+classes = ["computer security", "hardware", "networking", "operating systems", "other", "software"]
+
+[top.watson]
+# Watson node name -> top-level thesis label (MLC_Notebook SYSTEM_MODULES "general").
+"computer security" = "computer security"
+"hardware" = "hardware"
+# Not under /hardware in Watson; mapped to hardware by the original pipeline.
+"electronic components" = "hardware"
+"networking" = "networking"
+# Mapped to networking by the original pipeline (FIX_TARGETS, SYSTEM_MODULES).
+"internet technology" = "networking"
+"operating systems" = "operating systems"
+"software" = "software"
+# Mapped to software by the original pipeline (FIX_TARGETS, SYSTEM_MODULES).
+"programming languages" = "software"
+
+# Sub levels, one table per top-level parent. "networking" has no subcategories.
+# Each `classes` list is sorted and contains `other`.
+
+[sub."computer security"]
+classes = ["antivirus and malware", "network security", "other"]
+
+[sub."computer security".watson]
+"antivirus and malware" = "antivirus and malware"
+"network security" = "network security"
+
+[sub.hardware]
+classes = ["computer", "computer components", "computer networking", "other"]
+
+[sub.hardware.watson]
+"computer" = "computer"
+"computer components" = "computer components"
+"computer networking" = "computer networking"
+
+[sub."operating systems"]
+# Thesis spelling "MacOS" is the Watson node "mac os".
+classes = ["linux", "mac os", "other", "unix", "windows"]
+
+[sub."operating systems".watson]
+"linux" = "linux"
+"mac os" = "mac os"
+"unix" = "unix"
+"windows" = "windows"
+
+[sub.software]
+classes = ["databases", "other"]
+
+[sub.software.watson]
+"databases" = "databases"
