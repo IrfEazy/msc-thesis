@@ -60,7 +60,10 @@ dest = "data/tweets-dataset"
 path = "data/tweets-dataset-for-cyberattack-detection.zip"
 dest = "data/tweets-dataset-for-cyberattack-detection"
 
-# RANDOM_STATE: the thesis states no seed; MLC_Notebook defaults to 42.
+# RANDOM_STATE 42 is fixed before any results exist and is never tuned (the notebook fails on
+# any other seed unless SPLIT_ALLOW_OTHER_SEED=1, for tests). The split is grouped (duplicates
+# and truncated copies stay together) and defined by notebooks/splits.py; downstream stages read
+# the manifest and the split CSVs and pin its sha256.
 # Outputs go under {run_dir}/data so the extracted originals are never overwritten.
 [[notebooks]]
 name = "Train-Test split"
@@ -69,10 +72,10 @@ target = "local"
 cwd = "{repo}"
 inputs = ["{repo}/data/tweets-dataset-for-cyberattack-detection/tweets_final.csv"]
 outputs = [
-  "{run_dir}/data/filter_train.csv",
-  "{run_dir}/data/filter_test.csv",
-  "{run_dir}/data/categories_train.csv",
-  "{run_dir}/data/categories_test.csv",
+  "{run_dir}/data/split_manifest.csv",
+  "{run_dir}/data/split_manifest.json",
+  "{run_dir}/data/split_train.csv",
+  "{run_dir}/data/split_test.csv",
 ]
 
 
@@ -81,10 +84,9 @@ ROOT = "{repo}"
 TEST_SIZE = "0.2"
 RANDOM_STATE = "42"
 TWEETS_CSV = "{repo}/data/tweets-dataset-for-cyberattack-detection/tweets_final.csv"
-FILTER_TRAIN_CSV = "{run_dir}/data/filter_train.csv"
-FILTER_TEST_CSV = "{run_dir}/data/filter_test.csv"
-TEMP_CATEGORIES_TRAIN_CSV = "{run_dir}/data/categories_train.csv"
-TEMP_CATEGORIES_TEST_CSV = "{run_dir}/data/categories_test.csv"
+SPLIT_MANIFEST_CSV = "{run_dir}/data/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{run_dir}/data/split_train.csv"
+SPLIT_TEST_CSV = "{run_dir}/data/split_test.csv"
 
 [[notebooks]]
 name = "MultiLabelClassification"
