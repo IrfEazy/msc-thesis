@@ -1,0 +1,55 @@
+# Declarative embedder configuration read by notebooks/embeddings.py (load_embedders).
+# `env` names the environment variable that holds the GloVe file path or the Hugging Face hub id
+# (or local model directory); values live in the environment / experiments.toml, never here.
+
+# Defaults for every sentence_transformer encode call (overridable per embedder).
+[encode]
+batch_size = 32
+normalize_embeddings = false
+convert_to_numpy = true
+show_progress_bar = false
+
+# Parity check (Embeddings notebook): re-embedding a sample with another batch size must agree
+# within rtol * max|value|; GloVe is deterministic and must agree exactly.
+[parity]
+glove_rtol = 0.0
+sentence_transformer_rtol = 1e-4
+
+[[embedder]]
+name = "GloVe.6B.50D"
+kind = "glove"
+dim = 50
+env = "GLOVE_6B_50D_PATH"
+
+[[embedder]]
+name = "GloVe.6B.100D"
+kind = "glove"
+dim = 100
+env = "GLOVE_6B_100D_PATH"
+
+[[embedder]]
+name = "GloVe.6B.200D"
+kind = "glove"
+dim = 200
+env = "GLOVE_6B_200D_PATH"
+
+[[embedder]]
+name = "GloVe.6B.300D"
+kind = "glove"
+dim = 300
+env = "GLOVE_6B_300D_PATH"
+
+[[embedder]]
+name = "DistilRoBERTa"
+kind = "sentence_transformer"
+env = "DISTILROBERTA_PATH"
+
+[[embedder]]
+name = "SBERT"
+kind = "sentence_transformer"
+env = "SBERT_PATH"
+
+[[embedder]]
+name = "ATT&CK-BERT"
+kind = "sentence_transformer"
+env = "ATTACK_BERT_PATH"

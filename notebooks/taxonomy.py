@@ -63,7 +63,7 @@ class Taxonomy:
     def top_labels(self, watson_list: Iterable[str], relevant: Any, scheme: str) -> List[str]:
         if scheme not in SCHEMES:
             raise ValueError(f"unknown scheme {scheme!r}; expected one of {SCHEMES}")
-        relevant = _as_bool(relevant)
+        relevant = as_bool(relevant)
         if not relevant:
             if scheme == "two_step":
                 raise ValueError("two_step top labels are defined for relevant posts only")
@@ -76,10 +76,13 @@ class Taxonomy:
         return _map(watson_list, self.sub_maps[parent], self.other)
 
 
-def _as_bool(value: Any) -> bool:
+def as_bool(value: Any) -> bool:
     if isinstance(value, (bool, np.bool_)):
         return bool(value)
     raise TypeError(f"relevant must be a bool, got {type(value).__name__}: {value!r}")
+
+
+_as_bool = as_bool  # backward-compatible alias
 
 
 def _map(watson_list: Iterable[str], mapping: Mapping[str, str], other: str) -> List[str]:

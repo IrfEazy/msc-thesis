@@ -36,7 +36,7 @@ gpu_poll_interval = 60  # seconds between status polls while waiting
 setup_commands = [["{python}", "-c", "import nltk, sys; pkgs = sys.argv[1:]; failed = [p for p in pkgs if not nltk.download(p, quiet=True)]; sys.exit(f'nltk download failed: {failed}' if failed else 0)", "punkt", "punkt_tab", "wordnet", "omw-1.4", "stopwords", "averaged_perceptron_tagger", "averaged_perceptron_tagger_eng", "universal_tagset"]]
 dataset_ready_timeout = 900  # seconds to wait for each pushed dataset to become ready
 # Repo paths copied into the code dataset (directories: only *.py files).
-code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "notebooks/checkpoints.py", "requirements-kaggle.txt"]
+code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "notebooks/checkpoints.py", "notebooks/textprep.py", "notebooks/taxonomy.py", "notebooks/taxonomy.toml", "notebooks/splits.py", "notebooks/embeddings.py", "notebooks/embedders.toml", "requirements-kaggle.txt"]
 # Copied into the data dataset.
 data = [
   { src = "data/tweets-dataset", dest = "tweets-dataset" },
@@ -87,6 +87,72 @@ TWEETS_CSV = "{repo}/data/tweets-dataset-for-cyberattack-detection/tweets_final.
 SPLIT_MANIFEST_CSV = "{run_dir}/data/split_manifest.csv"
 SPLIT_TRAIN_CSV = "{run_dir}/data/split_train.csv"
 SPLIT_TEST_CSV = "{run_dir}/data/split_test.csv"
+
+# Shared embedding artifacts (notebooks/embeddings.py, embedders.toml): every corpus row (and the English
+# Cotov rows when COTOV_CSV exists) is embedded once per embedder into EMBEDDINGS_DIR; downstream
+# stages join by row id and verify fingerprints. SPLIT_MANIFEST_SHA256 is the pinned digest printed by
+# Train-Test split. The local entry embeds the four GloVe embedders (files under embedders/, gitignored);
+# transformers run on Kaggle (CPU kernel). Smoke: EMBED_SAMPLE_ROWS=N (artifacts marked NON-PRODUCTION).
+[[notebooks]]
+name = "Embeddings local"
+path = "notebooks/Embeddings.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = [
+  "{repo}/runs/splits/data/split_manifest.csv",
+  "{repo}/runs/splits/data/split_train.csv",
+  "{repo}/runs/splits/data/split_test.csv",
+  "{repo}/embedders/glove.6B.50d.txt",
+  "{repo}/embedders/glove.6B.100d.txt",
+  "{repo}/embedders/glove.6B.200d.txt",
+  "{repo}/embedders/glove.6B.300d.txt",
+]
+outputs = ["{run_dir}/embeddings/corpus__GloVe.6B.50D.npy", "{run_dir}/embeddings/corpus__GloVe.6B.300D.json"]
+notes = "GloVe embedders only; the transformers are embedded by the Kaggle entry."
+
+[notebooks.env]
+ROOT = "{repo}"
+SPLIT_MANIFEST_CSV = "{repo}/runs/splits/data/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{repo}/runs/splits/data/split_train.csv"
+SPLIT_TEST_CSV = "{repo}/runs/splits/data/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{run_dir}/embeddings"
+EMBEDDERS = "GloVe.6B.50D,GloVe.6B.100D,GloVe.6B.200D,GloVe.6B.300D"
+GLOVE_6B_50D_PATH = "{repo}/embedders/glove.6B.50d.txt"
+GLOVE_6B_100D_PATH = "{repo}/embedders/glove.6B.100d.txt"
+GLOVE_6B_200D_PATH = "{repo}/embedders/glove.6B.200d.txt"
+GLOVE_6B_300D_PATH = "{repo}/embedders/glove.6B.300d.txt"
+
+[[notebooks]]
+name = "Embeddings"
+path = "notebooks/Embeddings.ipynb"
+target = "kaggle"
+accelerator = "none"
+notes = "All seven embedders over the corpus (train + test by row id) and the English Cotov rows; an existing identical artifact in EMBEDDINGS_DIR is verified and reused."
+
+[notebooks.env]
+ROOT = "{repo}"
+SPLIT_MANIFEST_CSV = "{input:msc-thesis-data}/splits/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{input:msc-thesis-data}/splits/split_train.csv"
+SPLIT_TEST_CSV = "{input:msc-thesis-data}/splits/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{working}/embeddings"
+GLOVE_6B_50D_PATH = "{input:glove-embeddings}/glove.6B.50d.txt"
+GLOVE_6B_100D_PATH = "{input:glove-embeddings}/glove.6B.100d.txt"
+GLOVE_6B_200D_PATH = "{input:glove-embeddings}/glove.6B.200d.txt"
+GLOVE_6B_300D_PATH = "{input:glove-embeddings}/glove.6B.300d.txt"
+DISTILROBERTA_PATH = "sentence-transformers/all-distilroberta-v1"
+SBERT_PATH = "sentence-transformers/all-mpnet-base-v2"
+ATTACK_BERT_PATH = "basel/ATTACK-BERT"
+COTOV_CSV = "{input:anastasias-twitter-dataset}/anastasia.csv"
+
+[notebooks.kaggle]
+slug = "msc-thesis-embeddings"
+datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data", "anmolkumar/glove-embeddings", "irfancela/anastasias-twitter-dataset"]
+accelerator = "none"
+internet = true
+cwd = "{repo}"
+outputs_dirs = ["embeddings"]
 
 [[notebooks]]
 name = "MultiLabelClassification"

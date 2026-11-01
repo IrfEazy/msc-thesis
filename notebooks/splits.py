@@ -114,7 +114,7 @@ def stratification_labels(
     tax = tx._tax(taxonomy)
     out = []
     for rel, wl in zip(relevant, watson_lists):
-        if not tx._as_bool(rel):
+        if not tx.as_bool(rel):
             out.append(["irrelevant"])
             continue
         top = tax.top_labels(wl, True, "two_step")
@@ -218,7 +218,7 @@ def corpus_sha256(df: pd.DataFrame, columns: Optional[Dict[str, str]] = None) ->
         zip(
             ids,
             df[cols["text"]].map(_raw_str),
-            df[cols["relevant"]].map(lambda v: bool(tx._as_bool(v))),
+            df[cols["relevant"]].map(lambda v: bool(tx.as_bool(v))),
             df[cols["watson"]].map(_raw_str),
         )
     )
