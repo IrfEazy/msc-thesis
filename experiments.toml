@@ -36,7 +36,7 @@ gpu_poll_interval = 60  # seconds between status polls while waiting
 setup_commands = [["{python}", "-c", "import nltk, sys; pkgs = sys.argv[1:]; failed = [p for p in pkgs if not nltk.download(p, quiet=True)]; sys.exit(f'nltk download failed: {failed}' if failed else 0)", "punkt", "punkt_tab", "wordnet", "omw-1.4", "stopwords", "averaged_perceptron_tagger", "averaged_perceptron_tagger_eng", "universal_tagset"]]
 dataset_ready_timeout = 900  # seconds to wait for each pushed dataset to become ready
 # Repo paths copied into the code dataset (directories: only *.py files).
-code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "notebooks/checkpoints.py", "notebooks/textprep.py", "notebooks/taxonomy.py", "notebooks/taxonomy.toml", "notebooks/splits.py", "notebooks/embeddings.py", "notebooks/embedders.toml", "requirements-kaggle.txt"]
+code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "notebooks/checkpoints.py", "notebooks/textprep.py", "notebooks/taxonomy.py", "notebooks/taxonomy.toml", "notebooks/splits.py", "notebooks/embeddings.py", "notebooks/embedders.toml", "notebooks/filtering.py", "notebooks/filter.toml", "requirements-kaggle.txt"]
 # Copied into the data dataset.
 data = [
   { src = "data/tweets-dataset", dest = "tweets-dataset" },
@@ -217,40 +217,72 @@ inputs = ["data/tweets-dataset-for-cyberattack-detection/tweets_train.csv"]
 notes = "inputs lost (human, 2026-10-29)"
 blocked = "inputs lost (human, 2026-10-29)"
 
+# Relevance filter (notebooks/filter.ipynb, config notebooks/filter.toml): reads only the shared split and the embedding
+# artifacts of the "Embeddings" kernel; a CPU kernel with trial/candidate checkpoints (CHECKPOINT_DIR in outputs_dirs).
+# COTOV_CSV is kept only for the Related labels of the Cotov evaluation (the features come from the cotov artifacts).
 [[notebooks]]
 name = "filter"
 path = "notebooks/filter.ipynb"
 target = "kaggle"
-accelerator = "gpu"
-notes = "COTOV_CSV points at the anastasias-twitter-dataset copy; the Cotov section is skipped with a BLOCKED line if the file is absent. CV=5 per the thesis."
+accelerator = "none"
+notes = "28 candidates x 5 grouped folds, then max_evals (filter.toml) x 5 folds on the selected family; stops cleanly (INCOMPLETE) at the checkpoint budget and resumes from the checkpoints."
 
 [notebooks.env]
 ROOT = "{repo}"
-CV = "5"
 RANDOM_STATE = "42"
-TEST_SIZE = "0.2"
 OVERWRITE = "true"
-FILTER_TRAIN_CSV = "{input:msc-thesis-data}/splits/filter_train.csv"
-FILTER_TEST_CSV = "{input:msc-thesis-data}/splits/filter_test.csv"
-GLOVE_6B_50D_PATH = "{input:glove-embeddings}/glove.6B.50d.txt"
-GLOVE_6B_100D_PATH = "{input:glove-embeddings}/glove.6B.100d.txt"
-GLOVE_6B_200D_PATH = "{input:glove-embeddings}/glove.6B.200d.txt"
-GLOVE_6B_300D_PATH = "{input:glove-embeddings}/glove.6B.300d.txt"
-DISTILROBERTA_PATH = "sentence-transformers/all-distilroberta-v1"
-SBERT_PATH = "sentence-transformers/all-mpnet-base-v2"
-ATTACK_BERT_PATH = "basel/ATTACK-BERT"
-FILTER_MODELS = "{repo}/models/filter_models.pkl"
-FILTERS_PERFORMANCES_CSV = "{repo}/models/filters_performances.csv"
-OPTIMAL_FILTER_PICKLE = "{repo}/models/filter.pkl"
+SPLIT_MANIFEST_CSV = "{input:msc-thesis-data}/splits/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{input:msc-thesis-data}/splits/split_train.csv"
+SPLIT_TEST_CSV = "{input:msc-thesis-data}/splits/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{input:msc-thesis-embeddings}/embeddings"
+CHECKPOINT_DIR = "{working}/checkpoints"
+CHECKPOINT_BUDGET_HOURS = "11"
+CHECKPOINT_MARGIN_MINUTES = "60"
+FILTERS_PERFORMANCES_CSV = "{working}/models/filters_performances.csv"
+OPTIMAL_FILTER_PICKLE = "{working}/models/filter.pkl"
 COTOV_CSV = "{input:anastasias-twitter-dataset}/anastasia.csv"
 
 [notebooks.kaggle]
 slug = "msc-thesis-filter"
-datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data", "anmolkumar/glove-embeddings", "irfancela/anastasias-twitter-dataset"]
-accelerator = "gpu"
+datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data", "irfancela/anastasias-twitter-dataset"]
+kernels = ["msc-thesis-embeddings"]
+accelerator = "none"
 internet = true
 cwd = "{repo}"
-outputs_dirs = ["models"]
+outputs_dirs = ["models", "checkpoints"]
+
+# Local NON-PRODUCTION smoke of the filter (FILTER_SMOKE=1: few candidates, max_evals 2, writes only under
+# {run_dir}/filter-smoke and never the production pickle). EMBEDDINGS_DIR must hold the GloVe artifacts
+# (e.g. copy the embeddings/ of an "Embeddings local" run to runs/embeddings, or override the variable).
+[[notebooks]]
+name = "filter smoke"
+path = "notebooks/filter.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = [
+  "{repo}/runs/splits/data/split_manifest.csv",
+  "{repo}/runs/splits/data/split_train.csv",
+  "{repo}/runs/splits/data/split_test.csv",
+  "{repo}/runs/embeddings/corpus__GloVe.6B.50D.npy",
+]
+notes = "NON-PRODUCTION smoke; Cotov section runs when the local Cotov CSV and cotov artifacts exist."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+FILTER_SMOKE = "1"
+FILTER_SMOKE_OUT_DIR = "{run_dir}/filter-smoke"
+SPLIT_MANIFEST_CSV = "{repo}/runs/splits/data/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{repo}/runs/splits/data/split_train.csv"
+SPLIT_TEST_CSV = "{repo}/runs/splits/data/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{repo}/runs/embeddings"
+CHECKPOINT_DIR = "{run_dir}/filter-smoke/checkpoints"
+FILTERS_PERFORMANCES_CSV = "{repo}/models/filters_performances.csv"
+OPTIMAL_FILTER_PICKLE = "{repo}/models/filter.pkl"
+COTOV_CSV = "{repo}/data/kaggle/anastasias-twitter-dataset/anastasia.csv"
 
 [[notebooks]]
 name = "MLCGeneral train glove50"
