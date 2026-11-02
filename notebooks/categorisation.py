@@ -438,15 +438,17 @@ def run_oof(data: LevelData, embedder: str, candidates: Sequence[Candidate], cfg
                 missing.append(key)
                 continue
             t0 = time.monotonic()
-            try:
+            model = None
+            try:   # only the fit is guarded; errors in predict / predict_proba are bugs and propagate
                 model = fit_candidate(cfg, cand, X, data.Y_train, p.fit_idx, seed)
-                Xv = X[p.val_idx]
-                rec = {**base, "status": OK, "pred": model.predict(Xv), "score": model.predict_proba(Xv),
-                       "active": model.active.tolist(), "fit_seconds": time.monotonic() - t0}
             except EXPECTED_FIT_ERRORS as e:
                 log(f"{data.level} / {embedder} / {cand.name} fold {p.fold} failed: {type(e).__name__}: {e}")
                 rec = {**base, "status": FAILED, "reason": f"{type(e).__name__}: {e}"}
                 failed_fold = p.fold
+            if model is not None:
+                Xv = X[p.val_idx]
+                rec = {**base, "status": OK, "pred": model.predict(Xv), "score": model.predict_proba(Xv),
+                       "active": model.active.tolist(), "fit_seconds": time.monotonic() - t0}
             store.save(key, rec)
             budget.record("fit", time.monotonic() - t0)
             fold_recs[p.fold] = rec

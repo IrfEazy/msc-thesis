@@ -289,6 +289,25 @@ class OOFTests(unittest.TestCase):
             return real(cfg, cand, X, Y, fit_idx, seed)
         return fit
 
+    def test_predict_errors_propagate(self):
+        real = ct.fit_candidate
+
+        class Bad:
+            active = np.array([0])
+
+            def predict(self, X):
+                raise ValueError("predict bug")
+
+        def fit(cfg, cand, X, Y, fit_idx, seed):
+            return Bad() if cand.name == "BR[LR]" else real(cfg, cand, X, Y, fit_idx, seed)
+        ct.fit_candidate = fit
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                with self.assertRaises(ValueError):
+                    self.run_oof(make_store(d), Budget())
+        finally:
+            ct.fit_candidate = real
+
     def test_failure_skips_remaining_folds_and_is_recorded_once(self):
         calls = []
         real = ct.fit_candidate
