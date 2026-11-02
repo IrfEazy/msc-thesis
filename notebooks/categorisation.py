@@ -362,7 +362,8 @@ def _assemble(data: LevelData, plans: Sequence[FoldPlan], fold_recs: Mapping[int
         return {"status": INFEASIBLE, "reason": {f: r.get("reason") for f, r in fold_recs.items()
                                                  if r["status"] == INFEASIBLE}}
     if FAILED in statuses:
-        return {"status": FAILED, "reason": {f: r.get("reason") for f, r in fold_recs.items() if r["status"] == FAILED}}
+        return {"status": FAILED, "reason": {f: r.get("reason") for f, r in fold_recs.items()
+                                             if r["status"] == FAILED and not r.get("skipped")}}
     n, q = data.Y_train.shape
     pred = np.zeros((n, q), dtype=np.int64)
     score = np.zeros((n, q), dtype=np.float64)
@@ -399,6 +400,7 @@ def run_oof(data: LevelData, embedder: str, candidates: Sequence[Candidate], cfg
     stopped = False
     for cand in candidates:
         fold_recs: Dict[int, Mapping] = {}
+        failed_fold = None   # first fold of this candidate that failed; later folds are not fitted
         reasons = {}
         for p in plans:
             r = infeasible_reason(cfg, cand, data.Y_train[p.fit_idx])
@@ -409,15 +411,23 @@ def run_oof(data: LevelData, embedder: str, candidates: Sequence[Candidate], cfg
             val_ids = [data.train_ids[i] for i in p.val_idx]
             if store.has(key):
                 rec = store.load(key)
-                if rec.get("classes") != list(data.classes) or (rec["status"] == OK and rec["val_ids"] != val_ids):
+                if rec.get("classes") != list(data.classes) or rec.get("val_ids") != val_ids:
                     raise CategorisationError(f"checkpoint {key} does not match the current rows or classes")
                 fold_recs[p.fold] = rec
+                if rec["status"] == FAILED and not rec.get("skipped") and failed_fold is None:
+                    failed_fold = p.fold
                 continue
             base = {"classes": list(data.classes), "val_ids": val_ids, "n_fit": int(len(p.fit_idx)),
                     "n_partition": p.n_partition}
             if reasons:
                 why = reasons.get(p.fold) or f"infeasible in fold(s) {sorted(reasons)}"
                 rec = {**base, "status": INFEASIBLE, "reason": why}
+                store.save(key, rec)
+                fold_recs[p.fold] = rec
+                continue
+            if failed_fold is not None:   # the candidate already failed: no further fits, failure recorded once
+                rec = {**base, "status": FAILED, "skipped": True,
+                       "reason": f"skipped: fold {failed_fold} of this candidate already failed"}
                 store.save(key, rec)
                 fold_recs[p.fold] = rec
                 continue
@@ -436,6 +446,7 @@ def run_oof(data: LevelData, embedder: str, candidates: Sequence[Candidate], cfg
             except EXPECTED_FIT_ERRORS as e:
                 log(f"{data.level} / {embedder} / {cand.name} fold {p.fold} failed: {type(e).__name__}: {e}")
                 rec = {**base, "status": FAILED, "reason": f"{type(e).__name__}: {e}"}
+                failed_fold = p.fold
             store.save(key, rec)
             budget.record("fit", time.monotonic() - t0)
             fold_recs[p.fold] = rec

@@ -279,6 +279,49 @@ class OOFTests(unittest.TestCase):
                     np.testing.assert_array_equal(res.records[name]["pred"], rec["pred"])
                     np.testing.assert_allclose(res.records[name]["score"], rec["score"])
 
+    def _failing_fit(self, fail_name, fold_calls):
+        real = ct.fit_candidate
+
+        def fit(cfg, cand, X, Y, fit_idx, seed):
+            if cand.name == fail_name:
+                fold_calls.append(len(fit_idx))
+                raise ValueError("boom")
+            return real(cfg, cand, X, Y, fit_idx, seed)
+        return fit
+
+    def test_failure_skips_remaining_folds_and_is_recorded_once(self):
+        calls = []
+        real = ct.fit_candidate
+        ct.fit_candidate = self._failing_fit("BR[LR]", calls)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                store = make_store(d)
+                run = self.run_oof(store, Budget())
+                self.assertEqual(len(calls), 1)  # only the first fold was fitted
+                self.assertTrue(run.complete)
+                rec0 = run.records["BR[LR]"]
+                self.assertEqual(rec0["status"], ct.FAILED)
+                self.assertEqual(list(rec0["reason"]), [0])  # failure reason recorded once
+                ck.verify_complete(store, ct.expected_keys(self.data, ["A"], self.cands))
+                self.assertTrue(store.load(ct.oof_key("general", "A", "BR[LR]", 3))["skipped"])
+                # resume: no further fit attempts
+                run2 = self.run_oof(store, Budget())
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(run2.records["BR[LR]"]["status"], ct.FAILED)
+        finally:
+            ct.fit_candidate = real
+
+    def test_resume_validates_val_ids_of_failed_and_infeasible_records(self):
+        plan0 = ct.plan_folds(self.data, int(TINY["selection"]["min_labelset_count"]))[0]
+        wrong = [self.data.train_ids[i] for i in plan0.val_idx][::-1]
+        for name, status in (("BR[LR]", ct.FAILED), ("PSt(pruning_value=10000,max_reintroduced=1)[LR]", ct.INFEASIBLE)):
+            with tempfile.TemporaryDirectory() as d:
+                store = make_store(d)
+                store.save(ct.oof_key("general", "A", name, 0),
+                           {"status": status, "reason": "x", "classes": list(self.data.classes), "val_ids": wrong})
+                with self.assertRaises(ct.CategorisationError):
+                    self.run_oof(store, Budget())
+
 
 def rec(pred):
     pred = np.asarray(pred)
