@@ -1,0 +1,117 @@
+# Declarative configuration of the Two-Step categorisation experiment (notebooks/categorisation.py).
+# Project values live here; categorisation.py is generic. Changing anything here changes the checkpoint identity.
+#
+# Protocol (leakage-free rebuild, notebooks/rebuild.md): per level, every candidate (method x classifier,
+# a StandardScaler + MLC method Pipeline) gets one out-of-fold prediction per eligible TRAIN row from the
+# manifest inner folds; per embedder each label takes the candidate with the best pooled OOF F1; the embedder
+# with the best composed OOF macro F1 (fixed taxonomy classes) wins; the selected candidates are refit on all
+# eligible train rows and the categoriser is evaluated once on the test rows (group-bootstrap CIs).
+
+# Levels: population and labels are derived from the corpus rows and the taxonomy only.
+#   kind = "top": population = gold-relevant rows; labels = taxonomy.top_labels(watson_list, relevant, scheme);
+#                 classes = taxonomy.classes("top").
+#   kind = "sub": population = gold-relevant rows whose GOLD top labels (scheme) contain `parent`;
+#                 labels = taxonomy.sub_labels(watson_list, parent); classes = taxonomy.classes(parent).
+[levels.general]
+kind = "top"
+scheme = "two_step"
+
+[levels."computer security"]
+kind = "sub"
+parent = "computer security"
+scheme = "two_step"
+
+[levels.hardware]
+kind = "sub"
+parent = "hardware"
+scheme = "two_step"
+
+[levels."operating systems"]
+kind = "sub"
+parent = "operating systems"
+scheme = "two_step"
+
+[levels.software]
+kind = "sub"
+parent = "software"
+scheme = "two_step"
+
+[selection]
+levels = ["general", "computer security", "hardware", "operating systems", "software"]
+embedders = ["GloVe.6B.50D", "GloVe.6B.100D", "GloVe.6B.200D", "GloVe.6B.300D", "DistilRoBERTa", "SBERT", "ATT&CK-BERT"]
+# Candidate order (methods, grid points in listed order, then classifiers) is the canonical order and the
+# per-label tie-break: equal pooled OOF F1 (12 digits) -> the earlier candidate wins; equal composed macro F1
+# -> the earlier embedder wins.
+methods = ["BR", "CLR", "CC", "LP", "PSt", "MBR", "RAkEL", "HOMER"]
+classifiers = ["lr", "dt", "rf"]
+cv_folds = 5               # must equal the number of manifest inner folds
+min_labelset_count = 20    # thesis rule, computed on each fitting partition only (splits.frequent_labelsets)
+
+[bootstrap]
+# 95% percentile bootstrap CIs of the test metrics, resampling whole manifest groups. Seeded.
+B = 1000
+seed = 20241102
+level = 0.95
+
+[smoke]
+# CATEGORISATION_SMOKE=1: a tiny NON-PRODUCTION check of the whole flow; never writes the production outputs.
+levels = ["general", "computer security"]
+embedders = ["GloVe.6B.50D", "GloVe.6B.100D"]
+methods = ["BR", "LP", "PSt"]
+classifiers = ["lr"]
+bootstrap_B = 50
+
+# Methods: `class` is an importable dotted path; `params` are fixed constructor arguments; `grid` (optional)
+# expands one candidate per combination (keys in listed order, values in listed order). random_state=<seed>
+# is added when the class accepts it (CC, MBR, RAkEL, HOMER). `feasible_if_labelset_count_reaches` names the
+# parameter that some labelset of the fitting rows must reach; otherwise the candidate is recorded as
+# 'infeasible' (impossible by design, not a failure) and excluded from selection.
+[methods.BR]
+class = "MLC.BRClassifier"
+params = {}
+
+[methods.CLR]
+class = "MLC.CLRClassifier"
+params = {}
+
+[methods.CC]
+class = "MLC.CCClassifier"
+params = {}   # order = None (natural label order) is the default
+
+[methods.LP]
+class = "MLC.LPClassifier"
+params = {}
+
+[methods.PSt]
+class = "MLC.PStClassifier"
+params = {}
+grid = { pruning_value = [25, 50, 100], max_reintroduced = [1, 2] }
+feasible_if_labelset_count_reaches = "pruning_value"
+
+[methods.MBR]
+class = "MLC.MBRClassifier"
+params = { cv = 5 }
+
+[methods.RAkEL]
+class = "MLC.RAkELClassifier"
+params = {}
+
+[methods.HOMER]
+class = "MLC.HOMERClassifier"
+params = {}
+
+# Base classifiers (as in MLCGeneral.ipynb): random_state=<seed> is added when accepted.
+# one_vs_rest = true wraps the estimator in OneVsRestClassifier, keeping multiclass fits (LP/PSt/RAkEL/HOMER)
+# independent of the scikit-learn version.
+[classifiers.lr]
+estimator = "sklearn.linear_model.LogisticRegression"
+params = { solver = "liblinear", max_iter = 10000 }
+one_vs_rest = true
+
+[classifiers.dt]
+estimator = "sklearn.tree.DecisionTreeClassifier"
+params = {}
+
+[classifiers.rf]
+estimator = "sklearn.ensemble.RandomForestClassifier"
+params = {}
