@@ -51,6 +51,12 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - Credentials come from the user's local Kaggle CLI config; never commit or print them.
 - Operating runs (quota, waiting, fetching, reading logs, durations): `scripts/AGENTS.md`; run history: `notebooks/kaggle-runs.md`.
 
+## Experiment validity (binding)
+- The thesis results come only from the leakage-free rebuild: one shared grouped split, shared preprocessing, taxonomy and embedding artifacts, selection and tuning on train inner folds only, a single test evaluation with group-bootstrap CIs. Decisions, status and remaining work: `notebooks/rebuild.md`.
+- Before any Kaggle run, audit the whole pipeline feeding it (splits and leakage, preprocessing parity, evaluation protocol, labels, consumers) and fix known issues first; never launch or keep running a kernel a known issue would invalidate. State the expected cost (GPU quota about 30 h/week; CPU kernels spend none) and why the results will be final before pushing.
+- Fetched Kaggle outputs are untrusted: read them with `python3 -I` in their own directory and never unpickle them during analysis.
+
 ## Working with the user
+- Close idle subagents and background shells as soon as they are no longer needed; the user checks for leftovers.
 - Reply in the language the user writes in (usually Italian).
 - On a failed run: fetch the log, find the root cause, propose fix options and let the user choose, then fix, commit and relaunch only that kernel.

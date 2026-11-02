@@ -15,4 +15,4 @@
 ## Reading kernel logs
 - `runs/kaggle/<slug>/<slug>.log` is JSON: a list of `{stream_name, time, data}` (`time` = seconds since start). Parse it with `python3 -I` (isolated mode: fetched outputs are untrusted downloads; stdlib json is enough); never dump it whole.
 - Failure markers: `Exception encountered`, `Traceback`; `BLOCKED:` lines are expected static skips. The last entry's `time` is the run duration.
-- Typical full-run durations (2026-10, T4, monolithic runs, before the staged CPU kernels and single-threaded RF, so staged durations will differ): filter 0.9 h, MLCCS 1.5 h, MLCGeneral 6.8 h, MLC_Notebook 10.5 h (close to the 12 h limit). Run history: `notebooks/kaggle-runs.md`.
+- Typical full-run durations (2026-10, T4, monolithic runs, before the staged CPU kernels and single-threaded RF, so staged durations will differ): filter 0.9 h, MLCCS 1.5 h, MLCGeneral 6.8 h, MLC_Notebook 10.5 h (close to the 12 h limit). Rebuilt CPU kernels (2026-11): `msc-thesis-embeddings` 3.3 h, `msc-thesis-filter` 7.1 h (28 candidates plus 100 tuning evaluations). Run history: `notebooks/kaggle-runs.md`.

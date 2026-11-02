@@ -1,0 +1,23 @@
+# Leakage-free rebuild: decisions, status, remaining work
+
+Goal set by the human (2026-11-01): recreate the system exactly as the thesis methodology describes, with correct code, so that the best system and its statistics are valid. Every split, preprocessing, leakage and evaluation problem is fixed in code before anything runs. Keep this file current: update the status when a stage lands and drop items once done.
+
+## Decisions fixed with the human (do not re-litigate)
+- One shared grouped split for every stage (approved 2026-11-01): copies of the same tweet (same `group_key`, truncated copies merged by prefix) are always on the same side. Seed 42 and test size 0.2 were fixed before any result; `min_prefix` 40. Manifest sha256 `9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0` (21,368 rows, 14,147 groups, train 17,097 / test 4,271; zero group overlap with Cotov).
+- Selection, tuning and any threshold use only the train inner folds of the manifest. The test set is evaluated once per final model; report prevalence and 95% bootstrap CIs (resampling manifest groups on the test set; rows on Cotov, which has no groups).
+- PSt `pruning_value` (p) is a hyperparameter to tune, not a constant. MBR uses the robust out-of-fold variant (`cv=5`).
+- Staged notebooks run as chained, checkpointed CPU kernels. Re-running everything is fine; new outputs overwrite the old ones.
+- All outputs produced before this rebuild (old filter, MLCGeneral, MLCCS, MLC_Notebook runs in `kaggle-runs.md`) are invalid for the thesis: independent per-notebook splits leaked duplicates (8,917 rows, 41.7%, belong to multi-row groups), the filter was tuned on test, Cotov was scored with the wrong model, preprocessing differed between stages.
+- The original group-3 models and inputs (`AGENTS.md`, lost-inputs bullet) are not part of the rebuild; the rebuilt Two-Step and One-Step systems replace them.
+
+## Done
+- Shared library (`textprep`, `taxonomy`, `splits`; commits 63f83b9, 38d758f) and the split notebook.
+- Shared embedding artifacts (`embeddings.py`, `Embeddings.ipynb`; 7c9ae10): Kaggle kernel `msc-thesis-embeddings`, 14 production artifacts (corpus and cotov x 7 embedders).
+- Relevance filter (`filtering.py`, `filter.ipynb`; 092d31d): Kaggle `msc-thesis-filter` v4 COMPLETE (results in `kaggle-runs.md`).
+
+## Remaining, in order (each: work package, verify, review, commit, smoke, cost statement, full run)
+1. Two-Step categorisation (`MLCGeneral`, `MLCCS`): train on gold-relevant train rows; shared split, embedding artifacts and `taxonomy`; `frequent_labelsets` per fitting partition; fixed taxonomy classes for test; per-label/per-embedder selection on inner folds only; no hard-coded categories CSVs; rewire `experiments.toml`.
+2. One-Step (`MLC_Notebook`): irrelevant -> `other` in train and test; same shared artifacts; evaluate its implicit relevance decision against gold relevance (One-Step `other` also covers relevant posts without a mapped category, so never derive relevance from `other` alone).
+3. `SystemLabelAssignment`: importable System classes; per-model embedders from the artifacts or `embeddings.embed`; filter via `filtering.load_deployed_filter`; fix the row-0 bug; fixed class order; AUC from scores; stage-wise and end-to-end evaluation on the common test set, counting filter false negatives; defined `Other` semantics; group-bootstrap CIs.
+4. Kaggle wiring: remove the old `filter_*`/`categories_*` files from the data dataset once nothing reads them; record each run in `kaggle-runs.md`.
+5. Thesis: rewrite methodology and results from the valid runs only (`thesis/AGENTS.md`), including the One-Step `Other` wording in `Methodology.tex` (around line 83), which currently implies `Other` means irrelevant only.

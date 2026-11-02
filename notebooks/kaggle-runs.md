@@ -2,7 +2,19 @@
 
 Full runs of the Kaggle notebooks (owner `irfancela`, accelerator T4). Outputs are in `runs/kaggle/<slug>/` (gitignored); durations and metrics are taken from the fetched kernel logs. Add an entry for each new full run.
 
-## 2026-10-29 to 2026-10-31 (code at 197f5b5)
+## 2026-11-01 to 2026-11-02: leakage-free rebuild (CPU kernels)
+| Notebook | Kernel | Code | Status | Duration | Outputs |
+|---|---|---|---|---|---|
+| Embeddings | `msc-thesis-embeddings` | 7c9ae10 | COMPLETE | 3.3 h | `embeddings/` (14 artifacts: corpus 21,368 rows, cotov 22,347 rows, x 7 embedders) |
+| filter | `msc-thesis-filter` v4 | 092d31d | COMPLETE | 7.1 h | `models/filter.pkl` + `.json` sidecar (status `complete`), `filters_performances.csv`, `checkpoints/` |
+
+Results (filter):
+- Selected RF + SBERT (untuned selection stage: grouped 5-fold CV balanced accuracy 79.43 +- 1.75; tuned 80.05 +- 1.97; both selection diagnostics); tuned 100 evaluations: `n_estimators` 340, `max_depth` 22, `min_samples_leaf` 3, `min_samples_split` 14, `max_features` sqrt.
+- Test (4,271 rows, prevalence 0.52, 95% group-bootstrap CIs): balanced accuracy 78.74 [76.86, 80.81], ROC AUC 87.56 [85.93, 89.09]; untuned reference balanced accuracy 78.66 [76.65, 80.62] (tuning gain negligible).
+- Cotov (22,347 rows, prevalence 0.73, row bootstrap): balanced accuracy 97.77 [97.57, 97.99], ROC AUC 99.80.
+- A stale `filter_models.pkl` from the 2026-10-30 run was moved to `runs/kaggle/_stale-20261101/`.
+
+## 2026-10-29 to 2026-10-31 (code at 197f5b5; superseded, invalid for the thesis: see `rebuild.md`)
 | Notebook | Final version | Status | Duration | Outputs |
 |---|---|---|---|---|
 | filter | v3 | COMPLETE | 0.9 h | `models/filter.pkl`, `filter_models.pkl`, `filters_performances.csv` |
