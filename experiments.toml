@@ -908,6 +908,90 @@ SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d7
 EMBEDDINGS_DIR = "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings"
 
 [[notebooks]]
+name = "categorisation smoke hardware"
+path = "notebooks/categorisation.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = [
+  "{repo}/runs/splits/data/split_manifest.csv",
+  "{repo}/runs/splits/data/split_train.csv",
+  "{repo}/runs/splits/data/split_test.csv",
+  "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings/corpus__GloVe.6B.50D.npy",
+  "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings/corpus__GloVe.6B.100D.npy",
+]
+notes = "NON-PRODUCTION smoke (CATEGORISATION_SMOKE=1: [smoke] config); level hardware; writes only under {run_dir}/categorisation-smoke-hw."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+CATEGORISATION_SMOKE = "1"
+CATEGORISATION_LEVEL = "hardware"
+CATEGORISATION_SMOKE_OUT_DIR = "{run_dir}/categorisation-smoke-hw"
+CHECKPOINT_DIR = "{run_dir}/categorisation-smoke-hw/checkpoints"
+SPLIT_MANIFEST_CSV = "{repo}/runs/splits/data/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{repo}/runs/splits/data/split_train.csv"
+SPLIT_TEST_CSV = "{repo}/runs/splits/data/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings"
+
+[[notebooks]]
+name = "categorisation smoke operating systems"
+path = "notebooks/categorisation.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = [
+  "{repo}/runs/splits/data/split_manifest.csv",
+  "{repo}/runs/splits/data/split_train.csv",
+  "{repo}/runs/splits/data/split_test.csv",
+  "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings/corpus__GloVe.6B.50D.npy",
+  "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings/corpus__GloVe.6B.100D.npy",
+]
+notes = "NON-PRODUCTION smoke (CATEGORISATION_SMOKE=1: [smoke] config); level operating systems; writes only under {run_dir}/categorisation-smoke-os."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+CATEGORISATION_SMOKE = "1"
+CATEGORISATION_LEVEL = "operating systems"
+CATEGORISATION_SMOKE_OUT_DIR = "{run_dir}/categorisation-smoke-os"
+CHECKPOINT_DIR = "{run_dir}/categorisation-smoke-os/checkpoints"
+SPLIT_MANIFEST_CSV = "{repo}/runs/splits/data/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{repo}/runs/splits/data/split_train.csv"
+SPLIT_TEST_CSV = "{repo}/runs/splits/data/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings"
+
+[[notebooks]]
+name = "categorisation smoke software"
+path = "notebooks/categorisation.ipynb"
+target = "local"
+cwd = "{repo}"
+inputs = [
+  "{repo}/runs/splits/data/split_manifest.csv",
+  "{repo}/runs/splits/data/split_train.csv",
+  "{repo}/runs/splits/data/split_test.csv",
+  "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings/corpus__GloVe.6B.50D.npy",
+  "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings/corpus__GloVe.6B.100D.npy",
+]
+notes = "NON-PRODUCTION smoke (CATEGORISATION_SMOKE=1: [smoke] config); level software; writes only under {run_dir}/categorisation-smoke-sw."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+CATEGORISATION_SMOKE = "1"
+CATEGORISATION_LEVEL = "software"
+CATEGORISATION_SMOKE_OUT_DIR = "{run_dir}/categorisation-smoke-sw"
+CHECKPOINT_DIR = "{run_dir}/categorisation-smoke-sw/checkpoints"
+SPLIT_MANIFEST_CSV = "{repo}/runs/splits/data/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{repo}/runs/splits/data/split_train.csv"
+SPLIT_TEST_CSV = "{repo}/runs/splits/data/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings"
+
+[[notebooks]]
 name = "SystemLabelAssignment"
 path = "notebooks/SystemLabelAssignment.ipynb"
 target = "kaggle"

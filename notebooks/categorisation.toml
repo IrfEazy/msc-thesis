@@ -55,7 +55,7 @@ level = 0.95
 
 [smoke]
 # CATEGORISATION_SMOKE=1: a tiny NON-PRODUCTION check of the whole flow; never writes the production outputs.
-levels = ["general", "computer security"]
+levels = ["general", "computer security", "hardware", "operating systems", "software"]
 embedders = ["GloVe.6B.50D", "GloVe.6B.100D"]
 methods = ["BR", "LP", "PSt"]
 classifiers = ["lr"]
@@ -100,7 +100,7 @@ params = {}
 class = "MLC.HOMERClassifier"
 params = {}
 
-# Base classifiers (as in MLCGeneral.ipynb): random_state=<seed> is added when accepted.
+# Base classifiers (the estimators of the old per-level notebooks): random_state=<seed> is added when accepted.
 # one_vs_rest = true wraps the estimator in OneVsRestClassifier, keeping multiclass fits (LP/PSt/RAkEL/HOMER)
 # independent of the scikit-learn version.
 [classifiers.lr]
