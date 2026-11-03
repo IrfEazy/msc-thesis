@@ -1,6 +1,35 @@
 # Kaggle run log
 
-Full runs of the Kaggle notebooks (owner `irfancela`, accelerator T4). Outputs are in `runs/kaggle/<slug>/` (gitignored); durations and metrics are taken from the fetched kernel logs. Add an entry for each new full run.
+Full runs of the Kaggle notebooks (owner `irfancela`; T4 GPU for the 2026-10 runs, CPU kernels since the rebuild). Outputs are in `runs/kaggle/<slug>/` (gitignored); durations and metrics are taken from the fetched kernel logs. Add an entry for each new full run.
+
+## 2026-11-03 to 2026-11-04: Two-Step categorisation (CPU kernels)
+Code 914067e (notebook and config; 60f32a7 changed only `scripts/` and the computer security transformers slug, so the checkpoint identity is the same). Durations from the kernel logs; `done/total` = candidate-fold checkpoints.
+
+| Level | Kernel | Status | Duration | Checkpoints |
+|---|---|---|---|---|
+| general | `msc-thesis-cat-general-train-glove{50,100,200,300}` | COMPLETE | 0.9 / 1.7 / 2.3 / 3.9 h | 195/195 each |
+| general | `msc-thesis-cat-general-train-{distilroberta,sbert,attackbert}` | INCOMPLETE (budget) | 9.6 / 9.7 / 9.7 h | 180 / 179 / 177 of 195, 0 failed |
+| general | `msc-thesis-cat-general-assemble` | ERROR (missing checkpoints, refused to publish) | 0.2 h | - |
+| computer security | `-train-glove` / `-train-trans` / `-assemble` | COMPLETE | 1.5 / 4.7 / 0.2 h | 780 + 585 |
+| hardware | `-train-all` / `-assemble` | COMPLETE | 2.3 / 0.1 h | 1365 |
+| operating systems | `-train-all` / `-assemble` | COMPLETE | 0.7 / 0.1 h | 1365 |
+| software | `-train-all` / `-assemble` | COMPLETE | 2.5 / 0.1 h | 1365 |
+
+Results (test, all eligible rows, 95% group-bootstrap CIs; outputs in `runs/kaggle/<level assemble slug>/models/`):
+
+| Level | Selected embedder | n | micro F1 | macro F1 |
+|---|---|---|---|---|
+| computer security | GloVe.6B.200D | 1163 | 0.882 [0.861, 0.901] | 0.800 [0.648, 0.871] |
+| hardware | SBERT | 442 (thesis-comparable 424) | 0.812 [0.775, 0.846] | 0.689 [0.595, 0.748] |
+| operating systems | DistilRoBERTa | 217 | 0.719 [0.629, 0.808] | 0.663 [0.549, 0.780] |
+| software | DistilRoBERTa | 806 | 0.787 [0.746, 0.824] | 0.755 [0.706, 0.795] |
+
+Problems on the way:
+- The general transformer shards were estimated at about 8 h from one-fold local timings (`notebooks/rebuild.md`) but used the whole 10 h effective budget; HOMER[LR/DT/RF] and some RAkEL[RF] folds are missing. Pending (human decision): continuation shards per `scripts/AGENTS.md`, then re-push the general assemble.
+- The general assemble was pushed because Kaggle reported its sources COMPLETE although their checkpoint state was INCOMPLETE (see `scripts/AGENTS.md`).
+- Push rejections: 400 Bad Request for a 51-character title (slug shortened, `build` now checks), `Maximum batch CPU session count of 5 reached`, and API rate limiting misreported as "not COMPLETE" (fixed in 60f32a7).
+- A lead push loop stopped at the first failed push and left the queue idle for about 8 h overnight; one fetch was partial (818 of 2731 files) and was repeated.
+- Session artifacts (pipeline run, loop logs, timing scripts): `runs/sessions/2026-11-02-categorisation/`.
 
 ## 2026-11-01 to 2026-11-02: leakage-free rebuild (CPU kernels)
 | Notebook | Kernel | Code | Status | Duration | Outputs |

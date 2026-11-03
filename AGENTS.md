@@ -10,6 +10,7 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - `thesis/` - LaTeX thesis sources (see `thesis/AGENTS.md`).
 - `utils.py`, `preprocess_functions.py` - root helper modules (which notebooks import them: `notebooks/AGENTS.md`).
 - `data/` - datasets (local only).
+- `runs/` (gitignored) - runner outputs (`runs/<UTC timestamp>/`), fetched Kaggle outputs (`runs/kaggle/<slug>/`), and per-session working artifacts (`runs/sessions/<date>-<topic>/` with a `README.md`: pipeline-run copies, loop logs, timing scripts). Put every task artifact there, never only in a scratchpad or `/tmp`.
 
 ## Local-only paths
 - Gitignored: `data/`, `models/`, `mappings/`, `embedders/`, `img/`, `docs/`, `.env`, `.conda/`. Do not expect them in a clone.
@@ -61,3 +62,6 @@ Multi-label classification of cyberattack tweets, hierarchical by category level
 - Close idle subagents and background shells as soon as they are no longer needed; the user checks for leftovers.
 - Reply in the language the user writes in (usually Italian).
 - On a failed run: fetch the log, find the root cause, propose fix options and let the user choose, then fix, commit and relaunch only that kernel.
+- Every Kaggle push (full, continuation or relaunch) needs the user's explicit go for that run; a fix approval is not a launch approval unless the user says so. Commits are authorized; `git push` is not.
+- When resuming an interrupted session, first check the real state: `git status`/`log`, Kaggle `status` of the relevant kernels, fetched `runs/kaggle/` outputs, leftover background processes and the pipeline run under `runs/sessions/` (or `claude-pipeline-tool path <run-id>`); summaries may be stale.
+- Report your own mistakes (e.g. a stalled loop, a wrong estimate) plainly with their cost, then the fix.
