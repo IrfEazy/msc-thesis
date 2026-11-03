@@ -29,6 +29,7 @@ code_license = "CC0-1.0"  # repo is Unlicense
 data_license = "unknown"
 max_gpu_sessions = 2  # push waits until fewer manifest kernels (any invocation) are RUNNING/QUEUED; retries on a session-limit rejection
 max_cpu_sessions = 5  # local safety limit (not a Kaggle quota): same wait and session-limit retry as max_gpu_sessions, for CPU kernels
+session_wait_timeout_minutes = 720  # push exits non-zero (never pushes) when no session slot frees within this time
 gpu_poll_interval = 60  # seconds between status polls while waiting
 # Commands (argv lists) the bootstrap runs after setup and before the notebook; {python} = the kernel interpreter.
 # Notebooks never download NLTK data themselves and the Kaggle image lacks it.
@@ -611,7 +612,7 @@ CHECKPOINT_BUDGET_HOURS = "11"
 CHECKPOINT_MARGIN_MINUTES = "60"
 
 [notebooks.kaggle]
-slug = "msc-thesis-cat-computer-security-train-transformers"
+slug = "msc-thesis-cat-computer-security-train-trans"
 datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data"]
 kernels = ["msc-thesis-embeddings"]
 accelerator = "none"
@@ -639,13 +640,13 @@ EMBEDDINGS_DIR = "{input:msc-thesis-embeddings}/embeddings"
 CATEGORISATION_LEVEL = "computer security"
 STAGE = "assemble"
 CHECKPOINT_DIR = "{working}/checkpoints"
-CHECKPOINT_INPUTS = "{input:msc-thesis-cat-computer-security-train-glove}/checkpoints:{input:msc-thesis-cat-computer-security-train-transformers}/checkpoints"
+CHECKPOINT_INPUTS = "{input:msc-thesis-cat-computer-security-train-glove}/checkpoints:{input:msc-thesis-cat-computer-security-train-trans}/checkpoints"
 CATEGORISATION_OUT_DIR = "{working}/models"
 
 [notebooks.kaggle]
 slug = "msc-thesis-cat-computer-security-assemble"
 datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data"]
-kernels = ["msc-thesis-embeddings", "msc-thesis-cat-computer-security-train-glove", "msc-thesis-cat-computer-security-train-transformers"]
+kernels = ["msc-thesis-embeddings", "msc-thesis-cat-computer-security-train-glove", "msc-thesis-cat-computer-security-train-trans"]
 accelerator = "none"
 internet = true
 cwd = "{repo}"
