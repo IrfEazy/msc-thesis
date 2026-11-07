@@ -16,6 +16,7 @@ TINY = {
     "levels": {
         "general": {"kind": "top", "scheme": "two_step"},
         "computer security": {"kind": "sub", "parent": "computer security", "scheme": "two_step"},
+        "one step": {"kind": "top", "scheme": "one_step", "population": "all"},
     },
     "selection": {"levels": ["general", "computer security"], "embedders": ["A", "B"],
                   "methods": ["BR", "PSt"], "classifiers": ["lr"], "cv_folds": 5, "min_labelset_count": 4},
@@ -103,7 +104,11 @@ def quiet(*a, **k):
 class ConfigTests(unittest.TestCase):
     def test_production_config(self):
         sel = CFG["selection"]
-        self.assertEqual(sel["levels"], ["general", "computer security", "hardware", "operating systems", "software"])
+        self.assertEqual(sel["levels"], ["general", "computer security", "hardware", "operating systems", "software",
+                                      "one step"])
+        self.assertEqual(CFG["levels"]["one step"], {"kind": "top", "scheme": "one_step", "population": "all"})
+        for lvl in CFG["levels"].values():
+            ct.validate_level_cfg(lvl)
         self.assertEqual(len(sel["embedders"]), 7)
         self.assertEqual(sel["embedders"], fl.load_config("notebooks/filter.toml")["selection"]["embedders"])
         self.assertEqual((sel["min_labelset_count"], sel["cv_folds"]), (20, 5))
@@ -173,6 +178,130 @@ class PopulationTests(unittest.TestCase):
         cfg["selection"]["cv_folds"] = 4
         with self.assertRaises(ct.CategorisationError):
             ct.prepare_level(self.tr, self.te, self.man, "general", cfg)
+
+
+class OneStepTests(unittest.TestCase):
+    def setUp(self):
+        self.tr, self.te, self.man = corpus()
+
+    def test_population_all_and_labels(self):
+        d = ct.prepare_level(self.tr, self.te, self.man, "one step", TINY)
+        self.assertEqual(d.train_ids, self.tr["_id"].tolist())  # every row, corpus order
+        self.assertEqual(d.test_ids, self.te["_id"].tolist())
+        self.assertEqual(d.classes, tuple(ct._tx.default_taxonomy().classes(ct._tx.TOP)))
+        for i, rid in enumerate(d.train_ids):
+            row = self.tr[self.tr["_id"] == rid].iloc[0]
+            if not row.relevant:  # irrelevant -> other
+                self.assertEqual(d.labelsets_train[i], ("other",))
+            elif row.topic == 5:  # relevant-unmapped -> other too
+                self.assertEqual(d.labelsets_train[i], ("other",))
+            self.assertEqual(bool(d.relevant_train[i]), bool(row.relevant))
+        self.assertEqual(d.relevant_test.tolist(), self.te["relevant"].tolist())
+
+    def test_two_step_levels_unchanged(self):
+        d = ct.prepare_level(self.tr, self.te, self.man, "general", TINY)
+        self.assertEqual(d.train_ids, self.tr.loc[self.tr.relevant, "_id"].tolist())
+        self.assertTrue(d.relevant_train.all() and d.relevant_test.all())
+        tax = ct._tx.default_taxonomy()
+        for lvl in ("general", "computer security"):
+            cfg = TINY["levels"][lvl]
+            ids, ls = ct.level_rows(self.tr, cfg, tax, "_id", "relevant", "watson")
+            ids3, ls3, rel = ct.level_rows_relevance(self.tr, cfg, tax, "_id", "relevant", "watson")
+            self.assertEqual((ids, ls), (ids3, ls3))
+            self.assertTrue(all(rel))
+
+    def test_validation_fails_closed(self):
+        v = ct.validate_level_cfg
+        self.assertEqual(v({"kind": "top", "scheme": "two_step"}), "relevant")
+        for bad in ({"kind": "sub", "parent": "software", "scheme": "two_step", "population": "all"},
+                    {"kind": "top", "scheme": "two_step", "population": "all"},
+                    {"kind": "sub", "parent": "software", "scheme": "one_step", "population": "all"},
+                    {"kind": "top", "scheme": "one_step"},
+                    {"kind": "top", "scheme": "one_step", "population": "relevant"},
+                    {"kind": "top", "scheme": "two_step", "population": "everything"},
+                    {"kind": "mid", "scheme": "two_step"}):
+            with self.assertRaises(ct.CategorisationError, msg=str(bad)):
+                v(bad)
+            with self.assertRaises(ct.CategorisationError, msg=str(bad)):
+                ct.level_rows(self.tr, bad, ct._tx.default_taxonomy(), "_id", "relevant", "watson")
+
+    def _data(self):
+        classes = ("computer security", "hardware", "other", "software")
+        ls = [("software",), ("other",), ("other",), ("hardware", "other"), ("other",), ("computer security",),
+              ("other",), ("software",)]
+        rel = np.array([1, 1, 0, 1, 0, 1, 1, 0], dtype=bool)  # row 1, 6: relevant-unmapped (labelset other)
+        n = len(ls)
+        ids = [f"x{i}" for i in range(n)]
+        return ct.LevelData("one step", classes, ids, ct._labels_matrix(ls, classes), ls, np.zeros(n, dtype=int),
+                            np.array(ids), ids, ct._labels_matrix(ls, classes), ls,
+                            np.array(["a", "a", "b", "b", "c", "c", "d", "d"]), rel, rel)
+
+    def test_relevance_block(self):
+        d = self._data()
+        P = np.array([[0, 0, 0, 1],    # software            -> relevant (gold 1)
+                      [0, 0, 1, 0],    # other               -> not relevant (gold 1, unmapped: FN)
+                      [0, 0, 0, 0],    # empty               -> not relevant (gold 0: TN)
+                      [0, 1, 1, 0],    # hardware + other    -> relevant (gold 1)
+                      [1, 0, 1, 0],    # cs + other          -> relevant (gold 0: FP)
+                      [0, 0, 0, 0],    # empty               -> not relevant (gold 1: FN)
+                      [0, 0, 1, 0],    # other               -> not relevant (gold 1 unmapped: FN)
+                      [0, 0, 1, 0]])  # other               -> not relevant (gold 0: TN)
+        S = np.array([[.1, .1, .1, .9], [.1, .1, .9, .1], [.1, .1, .1, .1], [.1, .8, .9, .1],
+                      [.7, .1, .9, .1], [.2, .1, .1, .1], [.1, .1, .9, .1], [.1, .1, .9, .1]])
+
+        class Stub:
+            level, classes, embedder = "one step", d.classes, "A"
+            predict = staticmethod(lambda X: P)
+            predict_proba = staticmethod(lambda X: S)
+        cfg = json.loads(json.dumps(TINY))
+        cfg["selection"]["min_labelset_count"] = 1
+        res = ct.evaluate_test(Stub, d, cfg, lambda e, ids: np.zeros((len(ids), 2)), B=30, seed=3)
+        r = res["all"]["relevance"]
+        self.assertEqual(r["confusion_matrix"], [[2, 1], [3, 2]])  # [[tn, fp], [fn, tp]]
+        self.assertAlmostEqual(r["recall"], 2 / 5)
+        self.assertAlmostEqual(r["precision"], 2 / 3)
+        self.assertAlmostEqual(r["accuracy"], 4 / 8)
+        self.assertAlmostEqual(r["prevalence"], 5 / 8)
+        self.assertEqual(r["relevant_unmapped"], {"n": 2, "recall": 0.0})
+        self.assertEqual(r["relevant_mapped"]["n"], 3)
+        self.assertAlmostEqual(r["relevant_mapped"]["recall"], 2 / 3)
+        from sklearn.metrics import roc_auc_score
+        mx = S[:, [0, 1, 3]].max(axis=1)  # 'other' excluded from the score
+        self.assertAlmostEqual(r["roc_auc"], roc_auc_score(d.relevant_test.astype(int), mx))
+        self.assertEqual(r["bootstrap"]["unit"], "group")
+        self.assertIn("relevance", res["thesis_comparable"])
+        self.assertEqual(r["empty_predictions"], 2)  # rows 2 and 5
+        self.assertEqual(r["other_with_real"], 2)    # rows 3 and 4: counted relevant, 'other' does not veto
+
+    def test_gold_other_with_real_label_fails_closed(self):
+        class Tax:
+            def top_labels(self, wl, relevant, scheme):
+                return ["other", "software"]
+        for scheme, pop in (("one_step", "all"), ("two_step", "relevant")):
+            cfg = {"kind": "top", "scheme": scheme, "population": pop}
+            with self.assertRaises(ct.CategorisationError):
+                ct.level_rows(self.tr, cfg, Tax(), "_id", "relevant", "watson")
+
+    def test_relevance_only_for_population_all(self):
+        tr, te, man = self.tr, self.te, self.man
+        d = ct.prepare_level(tr, te, man, "general", TINY)
+        P = np.zeros((len(d.test_ids), len(d.classes)), dtype=int)
+
+        class Stub:
+            level, classes, embedder = "general", d.classes, "A"
+            predict = staticmethod(lambda X: P)
+            predict_proba = staticmethod(lambda X: P.astype(float))
+        res = ct.evaluate_test(Stub, d, TINY, lambda e, ids: np.zeros((len(ids), 2)), B=0, seed=1)
+        self.assertNotIn("relevance", res["all"])
+
+    def test_relevance_single_class_gold(self):
+        d = self._data()
+        d = ct.LevelData(**{**d.__dict__, "relevant_test": np.ones(8, dtype=bool)})
+        P = np.zeros((8, 4), dtype=int)
+        r = ct.relevance_block(d, P, P.astype(float), np.ones(8, dtype=bool), B=5, seed=1)
+        self.assertTrue(np.isnan(r["roc_auc"]))
+        self.assertNotIn("bootstrap", r)
+        self.assertEqual(r["recall"], 0.0)
 
 
 def handmade(labelsets, folds, classes=("a", "b", "c")):

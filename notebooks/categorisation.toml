@@ -12,6 +12,9 @@
 #                 classes = taxonomy.classes("top").
 #   kind = "sub": population = gold-relevant rows whose GOLD top labels (scheme) contain `parent`;
 #                 labels = taxonomy.sub_labels(watson_list, parent); classes = taxonomy.classes(parent).
+#   population (optional, default "relevant"): "all" keeps every corpus row and is only valid for kind "top" with
+#                 scheme "one_step" (irrelevant rows get "other"); scheme "one_step" requires population "all".
+#                 Such a level also reports the implicit relevance (any non-"other" label) vs gold relevance.
 [levels.general]
 kind = "top"
 scheme = "two_step"
@@ -36,8 +39,13 @@ kind = "sub"
 parent = "software"
 scheme = "two_step"
 
+[levels."one step"]
+kind = "top"
+scheme = "one_step"
+population = "all"
+
 [selection]
-levels = ["general", "computer security", "hardware", "operating systems", "software"]
+levels = ["general", "computer security", "hardware", "operating systems", "software", "one step"]
 embedders = ["GloVe.6B.50D", "GloVe.6B.100D", "GloVe.6B.200D", "GloVe.6B.300D", "DistilRoBERTa", "SBERT", "ATT&CK-BERT"]
 # Candidate order (methods, grid points in listed order, then classifiers) is the canonical order and the
 # per-label tie-break: equal pooled OOF F1 (12 digits) -> the earlier candidate wins; equal composed macro F1
@@ -55,7 +63,7 @@ level = 0.95
 
 [smoke]
 # CATEGORISATION_SMOKE=1: a tiny NON-PRODUCTION check of the whole flow; never writes the production outputs.
-levels = ["general", "computer security", "hardware", "operating systems", "software"]
+levels = ["general", "computer security", "hardware", "operating systems", "software", "one step"]
 embedders = ["GloVe.6B.50D", "GloVe.6B.100D"]
 methods = ["BR", "LP", "PSt"]
 classifiers = ["lr"]

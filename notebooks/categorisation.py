@@ -6,7 +6,9 @@ Generic: project values (levels, embedders, methods, classifiers, grids, bootstr
 * per level the population and labels come from the corpus rows and the taxonomy only: ``kind = "top"``
   uses the gold-relevant rows (``taxonomy.as_bool``) and ``top_labels``; ``kind = "sub"`` the gold-relevant
   rows whose GOLD top labels contain ``parent`` and ``sub_labels``. Label matrices always have the fixed
-  taxonomy columns (``taxonomy.classes``);
+  taxonomy columns (``taxonomy.classes``). A level with ``population = "all"`` (One-Step top, scheme
+  ``one_step``) keeps every row, labels irrelevant ones ``other``, and its test evaluation adds an implicit
+  relevance block (``relevance_block``);
 * the row ids are bound to the split manifest (train rows ``train`` with ``inner_fold`` >= 0, test rows
   ``test``; the manifest folds must be ``0..cv_folds-1``);
 * every fitting partition (each inner-fold training part, and all eligible train rows for the refit) drops
@@ -130,6 +132,28 @@ class LevelData:
     Y_test: np.ndarray
     labelsets_test: List[Tuple[str, ...]]
     groups_test: np.ndarray
+    relevant_train: Optional[np.ndarray] = None   # gold relevance (bool) of the eligible rows, same order
+    relevant_test: Optional[np.ndarray] = None
+
+
+POPULATIONS = ("relevant", "all")
+
+
+def validate_level_cfg(lvl: Mapping) -> str:
+    """Fail closed on an inconsistent level definition; returns the population (default 'relevant').
+    'all' keeps every corpus row and is only defined for the One-Step top level (scheme one_step, kind top);
+    scheme one_step needs population 'all' (irrelevant rows have no Two-Step labels)."""
+    kind, scheme = lvl.get("kind"), lvl.get("scheme")
+    if kind not in ("top", "sub"):
+        raise CategorisationError(f"unknown level kind {kind!r}")
+    pop = lvl.get("population", "relevant")
+    if pop not in POPULATIONS:
+        raise CategorisationError(f"unknown level population {pop!r} (expected one of {list(POPULATIONS)})")
+    if pop == "all" and (kind != "top" or scheme != "one_step"):
+        raise CategorisationError("population 'all' requires kind 'top' and scheme 'one_step'")
+    if scheme == "one_step" and pop != "all":
+        raise CategorisationError("scheme 'one_step' requires population 'all'")
+    return pop
 
 
 def _labels_matrix(labelsets: Sequence[Sequence[str]], classes: Sequence[str]) -> np.ndarray:
@@ -143,26 +167,38 @@ def _labels_matrix(labelsets: Sequence[Sequence[str]], classes: Sequence[str]) -
     return Y
 
 
-def level_rows(df, level_cfg: Mapping, taxonomy: _tx.Taxonomy, id_col: str, relevant_col: str,
-               watson_col: str) -> Tuple[List[str], List[Tuple[str, ...]]]:
-    """Ids and labelsets (sorted tuples) of the rows of ``df`` eligible for the level (gold labels only)."""
+def level_rows_relevance(df, level_cfg: Mapping, taxonomy: _tx.Taxonomy, id_col: str, relevant_col: str,
+                         watson_col: str) -> Tuple[List[str], List[Tuple[str, ...]], List[bool]]:
+    """Ids, labelsets (sorted tuples) and gold relevance of the rows of ``df`` eligible for the level.
+    Population 'relevant' (default): gold-relevant rows only; 'all': every row, labels from
+    ``top_labels(wl, relevant, scheme)``."""
     kind = level_cfg["kind"]
-    if kind not in ("top", "sub"):
-        raise CategorisationError(f"unknown level kind {kind!r}")
-    ids, labelsets = [], []
+    pop = validate_level_cfg(level_cfg)
+    ids, labelsets, rels = [], [], []
     for rid, rel, raw in zip(df[id_col], df[relevant_col], df[watson_col]):
-        if not _tx.as_bool(rel):
+        rel = _tx.as_bool(rel)
+        if pop == "relevant" and not rel:
             continue
         wl = _tx.watson_list(raw)
-        top = taxonomy.top_labels(wl, True, level_cfg["scheme"])
+        top = taxonomy.top_labels(wl, rel if pop == "all" else True, level_cfg["scheme"])
         if kind == "top":
             labels = top
+            if "other" in labels and len(labels) > 1:  # invariant of the taxonomy rule: fail closed
+                raise CategorisationError(f"gold labelset of row {rid!r} mixes 'other' with real top labels: {sorted(labels)}")
         else:
             if level_cfg["parent"] not in top:
                 continue
             labels = taxonomy.sub_labels(wl, level_cfg["parent"])
         ids.append(str(rid))
         labelsets.append(tuple(sorted(labels)))
+        rels.append(bool(rel))
+    return ids, labelsets, rels
+
+
+def level_rows(df, level_cfg: Mapping, taxonomy: _tx.Taxonomy, id_col: str, relevant_col: str,
+               watson_col: str) -> Tuple[List[str], List[Tuple[str, ...]]]:
+    """Ids and labelsets (sorted tuples) of the rows of ``df`` eligible for the level (gold labels only)."""
+    ids, labelsets, _ = level_rows_relevance(df, level_cfg, taxonomy, id_col, relevant_col, watson_col)
     return ids, labelsets
 
 
@@ -191,14 +227,15 @@ def prepare_level(train_df, test_df, manifest, level: str, cfg: Mapping, taxonom
         raise CategorisationError(f"manifest inner folds {manifest_folds} != 0..cv_folds-1 "
                                   f"(cv_folds={cfg['selection']['cv_folds']})")
     classes = tuple(tax.classes(_tx.TOP if lvl["kind"] == "top" else lvl["parent"]))
-    tr, ls_tr = level_rows(train_df, lvl, tax, cols["id"], cols["relevant"], cols["watson"])
-    te, ls_te = level_rows(test_df, lvl, tax, cols["id"], cols["relevant"], cols["watson"])
+    tr, ls_tr, rel_tr = level_rows_relevance(train_df, lvl, tax, cols["id"], cols["relevant"], cols["watson"])
+    te, ls_te, rel_te = level_rows_relevance(test_df, lvl, tax, cols["id"], cols["relevant"], cols["watson"])
     folds = m.loc[tr, "inner_fold"].to_numpy(dtype=np.int64)
     if len(folds) and folds.min() < 0:
         raise CategorisationError("train rows must have inner_fold >= 0")
     return LevelData(level, classes, tr, _labels_matrix(ls_tr, classes), ls_tr, folds,
                      m.loc[tr, "group"].astype(str).to_numpy(), te, _labels_matrix(ls_te, classes), ls_te,
-                     m.loc[te, "group"].astype(str).to_numpy())
+                     m.loc[te, "group"].astype(str).to_numpy(),
+                     np.asarray(rel_tr, dtype=bool), np.asarray(rel_te, dtype=bool))
 
 
 # --------------------------------------------------------------------------- fitting partitions
@@ -658,6 +695,60 @@ def refit(data: LevelData, selection: Selection, cfg: Mapping, features: Callabl
     return Categoriser(data.level, selection.embedder, data.classes, models, selection.label_candidates, info)
 
 
+def _population(data: LevelData, cfg: Mapping) -> str:
+    return validate_level_cfg(cfg["levels"][data.level])
+
+
+def relevance_block(data: LevelData, P, S, sel, *, B: int, seed: int, level: float = 0.95) -> Dict[str, Any]:
+    """Implicit relevance of an All-population (One-Step) top level on the test rows ``sel``: predicted relevant =
+    any non-'other' class predicted (empty prediction = not relevant; 'other' never vetoes a real label); score = max
+    non-'other' class score. It is an implicit relevance measure, not equivalent to the binary filter: relevant-unmapped
+    posts have gold 'other'. ``empty_predictions`` and ``other_with_real`` count the raw predictions with no class and
+    with 'other' plus at least one real label (no exclusivity rule).
+    Binary metrics vs gold relevance (``filtering.metrics``; ROC AUC NaN when gold has one class), confusion
+    counts [[tn, fp], [fn, tp]], prevalence, group-bootstrap CIs (``filtering.bootstrap_ci``), plus the
+    relevance recall on the relevant-unmapped rows (gold relevant, labelset ('other',)) and the mapped-relevant rows."""
+    if data.relevant_test is None:
+        raise CategorisationError("gold relevance of the test rows is required for the relevance block")
+    cls = list(data.classes)
+    if "other" not in cls:
+        raise CategorisationError("relevance block needs an 'other' class")
+    keep = [j for j, c in enumerate(cls) if c != "other"]
+    P, S = np.asarray(P), np.asarray(S)
+    gold = np.asarray(data.relevant_test, dtype=bool)[sel].astype(int)
+    pred = (P[:, keep] > 0).any(axis=1).astype(int) if keep else np.zeros(len(P), dtype=int)
+    score = S[:, keep].max(axis=1) if keep else np.zeros(len(P))
+    oi = cls.index("other")
+    n_empty = int((~(P > 0).any(axis=1)).sum())
+    n_other_real = int(((P[:, oi] > 0) & pred.astype(bool)).sum())
+    groups = data.groups_test[sel]
+    ls = [l for l, k in zip(data.labelsets_test, sel) if k]
+    unmapped = np.array([l == ("other",) for l in ls], dtype=bool) & (gold == 1)
+    mapped = (gold == 1) & ~unmapped
+    tn = int(((gold == 0) & (pred == 0)).sum()); fp = int(((gold == 0) & (pred == 1)).sum())
+    fn = int(((gold == 1) & (pred == 0)).sum()); tp = int(((gold == 1) & (pred == 1)).sum())
+    two = len(np.unique(gold)) == 2
+    if two:
+        m = _fl.metrics(gold, pred, score)
+    else:
+        from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score
+        m = {"balanced_accuracy": float(balanced_accuracy_score(gold, pred)),
+             "accuracy": float(accuracy_score(gold, pred)),
+             "precision": float(precision_score(gold, pred, zero_division=0)),
+             "recall": float(recall_score(gold, pred, zero_division=0)),
+             "f1": float(f1_score(gold, pred, zero_division=0)), "roc_auc": float("nan")}
+    out = {**m, "n": int(len(gold)), "prevalence": float(gold.mean()) if len(gold) else float("nan"),
+           "confusion_matrix": [[tn, fp], [fn, tp]], "predicted_relevant": int(pred.sum()),
+           "empty_predictions": n_empty, "other_with_real": n_other_real}
+    if B > 0 and two:
+        out["bootstrap"] = _fl.bootstrap_ci(gold, pred, score, groups, B=B, seed=seed, level=level)
+    def recall(mask):
+        return float(pred[mask].mean()) if mask.any() else float("nan")
+    out["relevant_unmapped"] = {"n": int(unmapped.sum()), "recall": recall(unmapped)}
+    out["relevant_mapped"] = {"n": int(mapped.sum()), "recall": recall(mapped)}
+    return out
+
+
 def evaluate_test(categoriser: Categoriser, data: LevelData, cfg: Mapping,
                   features: Callable[[str, Sequence[str]], np.ndarray], *, B: int, seed: int,
                   level: float = 0.95) -> Dict[str, Any]:
@@ -681,6 +772,8 @@ def evaluate_test(categoriser: Categoriser, data: LevelData, cfg: Mapping,
         if B > 0:
             m["bootstrap"] = group_bootstrap(data.Y_test[sel], P[sel], S[sel], data.groups_test[sel], data.classes,
                                              B=B, seed=seed, level=level)
+        if _population(data, cfg) == "all":
+            m["relevance"] = relevance_block(data, P[sel], S[sel], sel, B=B, seed=seed, level=level)
         out[name] = m
     out["primary"] = "all"
     return out
