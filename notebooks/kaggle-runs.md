@@ -11,6 +11,7 @@ Code 914067e (notebook and config; 60f32a7 changed only `scripts/` and the compu
 | general | `msc-thesis-cat-general-train-{distilroberta,sbert,attackbert}` | INCOMPLETE (budget) | 9.6 / 9.7 / 9.7 h | 180 / 179 / 177 of 195, 0 failed |
 | general | `msc-thesis-cat-general-train2-{distilroberta,sbert,attackbert}` (2026-11-07, continuations, commit 9d3522c, same code) | COMPLETE | 0.6 / 0.8 / 0.9 h | +15 / +16 / +18, 195/195 each, 0 failed |
 | general | `msc-thesis-cat-general-assemble` | ERROR (missing checkpoints, refused to publish) | 0.2 h | - |
+| general | `msc-thesis-cat-general-assemble` v2 (2026-11-07, attaches the `train2-*` continuations) | COMPLETE (published, sidecar `complete`) | 1.2 h | 1365 |
 | computer security | `-train-glove` / `-train-trans` / `-assemble` | COMPLETE | 1.5 / 4.7 / 0.2 h | 780 + 585 |
 | hardware | `-train-all` / `-assemble` | COMPLETE | 2.3 / 0.1 h | 1365 |
 | operating systems | `-train-all` / `-assemble` | COMPLETE | 0.7 / 0.1 h | 1365 |
@@ -20,13 +21,14 @@ Results (test, all eligible rows, 95% group-bootstrap CIs; outputs in `runs/kagg
 
 | Level | Selected embedder | n | micro F1 | macro F1 |
 |---|---|---|---|---|
+| general | ATT&CK-BERT | 2220 (thesis-comparable 2216) | 0.666 [0.637, 0.695] | 0.574 [0.537, 0.610] |
 | computer security | GloVe.6B.200D | 1163 | 0.882 [0.861, 0.901] | 0.800 [0.648, 0.871] |
 | hardware | SBERT | 442 (thesis-comparable 424) | 0.812 [0.775, 0.846] | 0.689 [0.595, 0.748] |
 | operating systems | DistilRoBERTa | 217 | 0.719 [0.629, 0.808] | 0.663 [0.549, 0.780] |
 | software | DistilRoBERTa | 806 | 0.787 [0.746, 0.824] | 0.755 [0.706, 0.795] |
 
 Problems on the way:
-- The general transformer shards were estimated at about 8 h from one-fold local timings (`notebooks/rebuild.md`) but used the whole 10 h effective budget; HOMER[LR/DT/RF] and some RAkEL[RF] folds are missing. Continued by the `train2-*` shards on 2026-11-07 (each under 1 h: the missing folds were far cheaper than the budget stop suggested); the general assemble re-push is pending.
+- The general transformer shards were estimated at about 8 h from one-fold local timings (`notebooks/rebuild.md`) but used the whole 10 h effective budget; HOMER[LR/DT/RF] and some RAkEL[RF] folds are missing. Continued by the `train2-*` shards on 2026-11-07 (each under 1 h: the missing folds were far cheaper than the budget stop suggested); the general assemble v2 then published (outputs fetched to `runs/kaggle/general-assemble-v2/msc-thesis-cat-general-assemble/`, kept apart from the failed v1 output in `runs/kaggle/msc-thesis-cat-general-assemble/`). General OOF composed macro F1 per embedder (selection scores, optimistic): GloVe 50/100/200/300 0.549/0.534/0.568/0.582, DistilRoBERTa 0.597, SBERT 0.598, ATT&CK-BERT 0.607.
 - The general assemble was pushed because Kaggle reported its sources COMPLETE although their checkpoint state was INCOMPLETE (see `scripts/AGENTS.md`).
 - Push rejections: 400 Bad Request for a 51-character title (slug shortened, `build` now checks), `Maximum batch CPU session count of 5 reached`, and API rate limiting misreported as "not COMPLETE" (fixed in 60f32a7).
 - A lead push loop stopped at the first failed push and left the queue idle for about 8 h overnight; one fetch was partial (818 of 2731 files) and was repeated.
