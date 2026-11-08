@@ -1271,6 +1271,105 @@ cwd = "{repo}"
 outputs_dirs = ["checkpoints"]
 
 [[notebooks]]
+name = "categorisation one step train3 distilroberta"
+path = "notebooks/categorisation.ipynb"
+target = "kaggle"
+accelerator = "none"
+notes = "Continuation of the one step train2 shard (DistilRoBERTa): resumes from the train2 checkpoints (CHECKPOINT_INPUTS) and runs the candidate-folds still missing; see scripts/AGENTS.md."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+SPLIT_MANIFEST_CSV = "{input:msc-thesis-data}/splits/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{input:msc-thesis-data}/splits/split_train.csv"
+SPLIT_TEST_CSV = "{input:msc-thesis-data}/splits/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{input:msc-thesis-embeddings}/embeddings"
+CATEGORISATION_LEVEL = "one step"
+STAGE = "train"
+EMBEDDERS = "DistilRoBERTa"
+CHECKPOINT_DIR = "{working}/checkpoints"
+CHECKPOINT_BUDGET_HOURS = "11"
+CHECKPOINT_MARGIN_MINUTES = "60"
+CHECKPOINT_INPUTS = "{input:msc-thesis-cat-onestep-train-distilroberta}/checkpoints:{input:msc-thesis-cat-onestep-train2-distilroberta}/checkpoints"
+
+[notebooks.kaggle]
+slug = "msc-thesis-cat-onestep-train3-distilroberta"
+datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data"]
+kernels = ["msc-thesis-embeddings", "msc-thesis-cat-onestep-train-distilroberta", "msc-thesis-cat-onestep-train2-distilroberta"]
+accelerator = "none"
+internet = true
+cwd = "{repo}"
+outputs_dirs = ["checkpoints"]
+
+[[notebooks]]
+name = "categorisation one step train3 sbert"
+path = "notebooks/categorisation.ipynb"
+target = "kaggle"
+accelerator = "none"
+notes = "Continuation of the one step train2 shard (SBERT): resumes from the train2 checkpoints (CHECKPOINT_INPUTS) and runs the candidate-folds still missing; see scripts/AGENTS.md."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+SPLIT_MANIFEST_CSV = "{input:msc-thesis-data}/splits/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{input:msc-thesis-data}/splits/split_train.csv"
+SPLIT_TEST_CSV = "{input:msc-thesis-data}/splits/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{input:msc-thesis-embeddings}/embeddings"
+CATEGORISATION_LEVEL = "one step"
+STAGE = "train"
+EMBEDDERS = "SBERT"
+CHECKPOINT_DIR = "{working}/checkpoints"
+CHECKPOINT_BUDGET_HOURS = "11"
+CHECKPOINT_MARGIN_MINUTES = "60"
+CHECKPOINT_INPUTS = "{input:msc-thesis-cat-onestep-train-sbert}/checkpoints:{input:msc-thesis-cat-onestep-train2-sbert}/checkpoints"
+
+[notebooks.kaggle]
+slug = "msc-thesis-cat-onestep-train3-sbert"
+datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data"]
+kernels = ["msc-thesis-embeddings", "msc-thesis-cat-onestep-train-sbert", "msc-thesis-cat-onestep-train2-sbert"]
+accelerator = "none"
+internet = true
+cwd = "{repo}"
+outputs_dirs = ["checkpoints"]
+
+[[notebooks]]
+name = "categorisation one step train3 attackbert"
+path = "notebooks/categorisation.ipynb"
+target = "kaggle"
+accelerator = "none"
+notes = "Continuation of the one step train2 shard (ATT&CK-BERT): resumes from the train2 checkpoints (CHECKPOINT_INPUTS) and runs the candidate-folds still missing; see scripts/AGENTS.md."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+SPLIT_MANIFEST_CSV = "{input:msc-thesis-data}/splits/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{input:msc-thesis-data}/splits/split_train.csv"
+SPLIT_TEST_CSV = "{input:msc-thesis-data}/splits/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{input:msc-thesis-embeddings}/embeddings"
+CATEGORISATION_LEVEL = "one step"
+STAGE = "train"
+EMBEDDERS = "ATT&CK-BERT"
+CHECKPOINT_DIR = "{working}/checkpoints"
+CHECKPOINT_BUDGET_HOURS = "11"
+CHECKPOINT_MARGIN_MINUTES = "60"
+CHECKPOINT_INPUTS = "{input:msc-thesis-cat-onestep-train-attackbert}/checkpoints:{input:msc-thesis-cat-onestep-train2-attackbert}/checkpoints"
+
+[notebooks.kaggle]
+slug = "msc-thesis-cat-onestep-train3-attackbert"
+datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data"]
+kernels = ["msc-thesis-embeddings", "msc-thesis-cat-onestep-train-attackbert", "msc-thesis-cat-onestep-train2-attackbert"]
+accelerator = "none"
+internet = true
+cwd = "{repo}"
+outputs_dirs = ["checkpoints"]
+
+[[notebooks]]
 name = "categorisation one step assemble"
 path = "notebooks/categorisation.ipynb"
 target = "kaggle"
@@ -1289,13 +1388,13 @@ EMBEDDINGS_DIR = "{input:msc-thesis-embeddings}/embeddings"
 CATEGORISATION_LEVEL = "one step"
 STAGE = "assemble"
 CHECKPOINT_DIR = "{working}/checkpoints"
-CHECKPOINT_INPUTS = "{input:msc-thesis-cat-onestep-train-glove50}/checkpoints:{input:msc-thesis-cat-onestep-train-glove100}/checkpoints:{input:msc-thesis-cat-onestep-train-glove200}/checkpoints:{input:msc-thesis-cat-onestep-train-glove300}/checkpoints:{input:msc-thesis-cat-onestep-train-distilroberta}/checkpoints:{input:msc-thesis-cat-onestep-train-sbert}/checkpoints:{input:msc-thesis-cat-onestep-train-attackbert}/checkpoints:{input:msc-thesis-cat-onestep-train2-distilroberta}/checkpoints:{input:msc-thesis-cat-onestep-train2-sbert}/checkpoints:{input:msc-thesis-cat-onestep-train2-attackbert}/checkpoints"
+CHECKPOINT_INPUTS = "{input:msc-thesis-cat-onestep-train-glove50}/checkpoints:{input:msc-thesis-cat-onestep-train-glove100}/checkpoints:{input:msc-thesis-cat-onestep-train-glove200}/checkpoints:{input:msc-thesis-cat-onestep-train-glove300}/checkpoints:{input:msc-thesis-cat-onestep-train-distilroberta}/checkpoints:{input:msc-thesis-cat-onestep-train-sbert}/checkpoints:{input:msc-thesis-cat-onestep-train-attackbert}/checkpoints:{input:msc-thesis-cat-onestep-train2-distilroberta}/checkpoints:{input:msc-thesis-cat-onestep-train2-sbert}/checkpoints:{input:msc-thesis-cat-onestep-train2-attackbert}/checkpoints:{input:msc-thesis-cat-onestep-train3-distilroberta}/checkpoints:{input:msc-thesis-cat-onestep-train3-sbert}/checkpoints:{input:msc-thesis-cat-onestep-train3-attackbert}/checkpoints"
 CATEGORISATION_OUT_DIR = "{working}/models"
 
 [notebooks.kaggle]
 slug = "msc-thesis-cat-onestep-assemble"
 datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data"]
-kernels = ["msc-thesis-embeddings", "msc-thesis-cat-onestep-train-glove50", "msc-thesis-cat-onestep-train-glove100", "msc-thesis-cat-onestep-train-glove200", "msc-thesis-cat-onestep-train-glove300", "msc-thesis-cat-onestep-train-distilroberta", "msc-thesis-cat-onestep-train-sbert", "msc-thesis-cat-onestep-train-attackbert", "msc-thesis-cat-onestep-train2-distilroberta", "msc-thesis-cat-onestep-train2-sbert", "msc-thesis-cat-onestep-train2-attackbert"]
+kernels = ["msc-thesis-embeddings", "msc-thesis-cat-onestep-train-glove50", "msc-thesis-cat-onestep-train-glove100", "msc-thesis-cat-onestep-train-glove200", "msc-thesis-cat-onestep-train-glove300", "msc-thesis-cat-onestep-train-distilroberta", "msc-thesis-cat-onestep-train-sbert", "msc-thesis-cat-onestep-train-attackbert", "msc-thesis-cat-onestep-train2-distilroberta", "msc-thesis-cat-onestep-train2-sbert", "msc-thesis-cat-onestep-train2-attackbert", "msc-thesis-cat-onestep-train3-distilroberta", "msc-thesis-cat-onestep-train3-sbert", "msc-thesis-cat-onestep-train3-attackbert"]
 accelerator = "none"
 internet = true
 cwd = "{repo}"
