@@ -2,9 +2,9 @@
 
 ## Pipeline order (inferred from names and imports)
 - "base" here means `MultiLabelClassification.ipynb`.
-- Rebuilt pipeline: `Train-Test split` -> `Embeddings` -> `filter` -> Two-Step (`categorisation`, one notebook, five levels) / One-Step (the same notebook, level `one step`; `MLC_Notebook.ipynb` is superseded and no longer in the manifest) -> `SystemLabelAssignment`; status and remaining work in `rebuild.md`.
+- Rebuilt pipeline: `Train-Test split` -> `Embeddings` -> `filter` -> Two-Step (`categorisation`, one notebook, five levels) / One-Step (the same notebook, level `one step`; `MLC_Notebook.ipynb` was superseded and deleted, history in git) -> `SystemLabelAssignment`; status and remaining work in `rebuild.md`.
 - Original group-3 order: `filter` -> `Train-Test split` -> `MultiLabelClassification<Level>` per hierarchy level (base, Computer, ComputerNetworking, ComputerSecurity, Hardware, OperatingSystems, Software, SMOTE variant) -> `SystemLabelAssignment`.
-- `MLC_Notebook` (superseded, not in the manifest) and `categorisation` are built on the `MLC` package.
+- `categorisation` is built on the `MLC` package.
 
 ## Shared pipeline library (leakage-free rebuild)
 - Every notebook and the System must use these modules (pure; no nltk or embedder imports; tests in `notebooks/tests`), not their own cleaning, label mapping or splitting:
@@ -40,7 +40,7 @@
 
 
 ## Staged, checkpointed runs (`categorisation`)
-- `MLC_Notebook` is superseded by categorisation level `one step` and has no manifest entries; its history is in git and `kaggle-runs.md`.
+- `MLC_Notebook` was superseded by categorisation level `one step` and deleted; its history is in git and `kaggle-runs.md`.
 - Stage env: `STAGE` (`categorisation`) = `train`, `assemble` or `all` (default; `all` trains then assembles in one session). Production runs use no other overrides.
 - Units: `EMBEDDERS` (`categorisation`, train only) = comma-separated embedder names. Embedder names: `GloVe.6B.50D/100D/200D/300D`, `DistilRoBERTa`, `SBERT`, `ATT&CK-BERT`. Assemble rejects any subset (it must cover the full configuration).
 - Checkpoints (`notebooks/checkpoints.py`): `CHECKPOINT_DIR` (default `./checkpoints`, gitignored) is the output store; `CHECKPOINT_INPUTS` (`:`-separated, globs ok) are read-only earlier stores. Identity (config, code and data hashes, module versions incl. the torch build tag) must match across stages, so all stages of a run use the same image and identity inputs:
@@ -52,7 +52,7 @@
 - Kaggle: `experiments.toml` declares CPU kernels per stage (`categorisation`, slugs `msc-thesis-cat-<level>-train-<shard>` / `-assemble`, level `one step` uses slug base `msc-thesis-cat-onestep`: general and one step one shard per embedder, computer security GloVe and transformers shards, hardware, operating systems and software one shard each; general also has `-train2-<shard>` continuation shards (distilroberta, sbert, attackbert), which its assemble lists too; every assemble chains its shards, all chain `msc-thesis-embeddings`). Operating them: `scripts/AGENTS.md`.
 
 ## Recorded Python versions (`language_info.version`)
-- 3.10.14: `MultiLabelClassification*`; 3.11.13: `filter`, `MLC_Notebook`; 3.13.2: `Train-Test split`; 2.7.6: `SystemLabelAssignment` (likely stale metadata).
+- 3.10.14: `MultiLabelClassification*`; 3.11.13: `filter`; 3.13.2: `Train-Test split`; 2.7.6: `SystemLabelAssignment` (likely stale metadata).
 
 ## Device selection
 - `filter` and `MultiLabelClassification*` (except SMOTE) pass `device=select_device()` (root `device.py`, env `COMPUTE_DEVICE`: auto, cpu or cuda) to every active `XGBClassifier`.
