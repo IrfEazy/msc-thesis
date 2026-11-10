@@ -10,7 +10,7 @@ The need to ensure robustness and the ability to generalize in cybersecurity-rel
 
 The works~\cite{cotov2023} and~\cite{behzadan2018} provided NistPosts and CyberPosts datasets respectively. The two sources describe different approaches to collecting and processing datasets of posts for cybersecurity analysis.
 
-The NistPosts dataset is a collection of 24,474 posts available for the training and assessment steps. The dataset made available by the authors of~\cite{cotov2023} is made of social media posts extracted from Twitter using Twitter APIs. It combines the NIST CVE descriptions and the social media contents labeled as ``\texttt{informative}'' or ``\texttt{not informative}.'' These data were labeled with an active learning approach to prioritize the posts' evaluation based on their relevance probability. Those posts were joined with those belonging to a compact list of 36 Twitter users. To ensure the relevance of the obtained data, pertinent keywords were derived from the NIST website and a semi-manual selection process. The TWARC library was employed to enrich the dataset with additional data. Manual labeling proceeded to build up the datasets when data was collected. From a data quality perspective, duplicates and posts with very short text were eliminated.
+The NistPosts dataset is used only as an external evaluation set for the relevance task: its 22,347 English posts, labeled \texttt{Related} or not, are never used for fitting, model selection, or tuning. The dataset made available by the authors of~\cite{cotov2023} is made of social media posts extracted from Twitter using Twitter APIs. It combines the NIST CVE descriptions and the social media contents labeled as ``\texttt{informative}'' or ``\texttt{not informative}.'' These data were labeled with an active learning approach to prioritize the posts' evaluation based on their relevance probability. Those posts were joined with those belonging to a compact list of 36 Twitter users. To ensure the relevance of the obtained data, pertinent keywords were derived from the NIST website and a semi-manual selection process. The TWARC library was employed to enrich the dataset with additional data. Manual labeling proceeded to build up the datasets when data was collected. From a data quality perspective, duplicates and posts with very short text were eliminated.
 
 The CyberPosts dataset is a collection of 21,368 posts curated directly from cybersecurity experts and made available by the authors of~\cite{behzadan2018}. The stream listener results were pre-filtered by keywords, including general words like ``\texttt{vulnerability}'' and ``\texttt{0day}'' and specific threat-related words like ``\texttt{DDoS}'' and ``\texttt{SQL injection}.'' The posts were pre-labeled in relevance and type to serve as suggestions in the annotation process, which four human cybersecurity experts performed concurrently on relevance and threat types. Then, IBM's Watson Natural Language Understanding service classified each post's textual content and made it available to experts to help annotate.
 
@@ -35,19 +35,44 @@ By plotting the word clouds of the two datasets in Figure~\ref{fig:wordclouds}, 
 
 Figure~\ref{fig:words-distribution} shows that in CyberPosts, both relevance labels (0 and 1) contained a significant proportion of cybersecurity-related terms, making it a more suitable dataset for training a cybersecurity filter. In contrast, NistPosts showed a higher imbalance where label 0 (non-relevant) consisted of primarily non-cybersecurity terms, and label 1 (relevant) contained cybersecurity-related terms.
 
-Even if the wordclouds (Figure~\ref{fig:wordclouds}) showed that some common keywords were evenly distributed, the word distribution analysis showed an imbalanced distribution across the two labels. For this reason, the classifiers were trained using the CyberPosts dataset to ensure they would be more robust in learning the post's underlying patterns. Ultimately, the NistPosts dataset was used as a second evaluation set to validate the models.
+Even if the wordclouds (Figure~\ref{fig:wordclouds}) showed that some common keywords were evenly distributed, the word distribution analysis showed an imbalanced distribution across the two labels. For this reason, the classifiers were trained using the CyberPosts dataset to ensure they would be more robust in learning the post's underlying patterns. Ultimately, the NistPosts dataset was used as an external evaluation set for the relevance task.
 
 The CyberPosts dataset has different columns that can interest the implementation of a classifier; however, for obvious reasons, this study uses the ``\texttt{text}'' column, the ``\texttt{relevant}'' column for training and testing the binary classifier filter, and the ``\texttt{watson}'' column for training and testing the multi-label classifier model for assigning categories to posts. The ``\texttt{annotation}'' field is another interesting column since it contains the labeling of cybersecurity experts. Still, it was not used since its values were not considered essential for linking the posts to the nodes of companies' system graphs.
 
-\begin{figure}
+The Watson categories are mapped through a fixed taxonomy to the labels of the system: five high-level categories (\texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, and \texttt{Software}) and, below four of them, the subcategories listed in Section~\ref{subsec:two-step-system-mth}. The label \texttt{Other} marks the posts with no mapped category: it covers both the irrelevant posts and the relevant posts whose Watson categories do not map to any node of the taxonomy. Consequently, \texttt{Other} is not equivalent to irrelevance, and it is exclusive: it is never assigned together with a mapped category.
+
+Table~\ref{tab:label-counts} reports the label counts of the CyberPosts dataset in the training and test partitions defined in Section~\ref{subsec:data-preprocessing}. The labels are strongly imbalanced: \texttt{Other} is the most frequent label, and \texttt{Computer Security} is the most frequent mapped one. The most frequent label-sets (training and test partitions together) are ``\texttt{(Other)}'' with 12,511 posts, ``\texttt{(Computer Security, Antivirus and Malware)}'' with 1,702 posts, and ``\texttt{(Computer Security, Network Security)}'' with 719 posts. Such a distribution makes label-set-based methods such as Label Powerset harder to train, and many label-sets are too rare to learn from, which motivates the label-set frequency rule of Section~\ref{subsec:data-preprocessing}.
+
+\begin{table}
     \centering
-    \includegraphics[width=1\linewidth]{Images/behzadan_target_distribution}
-    \caption{\textbf{Distribution of Categories in CyberPosts Dataset}.}
-    \label{fig:cyber-posts-target-distribution}
-\end{figure}
-
-A weak point of the CyberPosts dataset is its strongly imbalanced dataset for the MLC task (Figure~\ref{fig:cyber-posts-target-distribution}). The most common label among the posts is ``\texttt{Computer Security},'' with 9,216 samples associated. Then, at the second position, there is the ``\texttt{Other}'' label with 8,013 samples, which already highlights the imbalance. Still, in the third position, the label ``\texttt{Antivirus and Malware}'' with 5,854 samples, followed by the label ``\texttt{Software}'' with 5,214 samples, half of the most common label.
-
+    \caption{\textbf{Label counts in CyberPosts} (training and test partitions).}
+    \label{tab:label-counts}
+    \small
+    \begin{tabular}{lrr}
+        \hline
+        \textbf{Label} & \textbf{Train} & \textbf{Test} \\
+        \hline
+        Posts & 17,097 & 4,271 \\
+        Relevant & 8,892 & 2,220 \\
+        Computer Security & 4,654 & 1,163 \\
+        Hardware & 1,774 & 442 \\
+        Networking & 731 & 183 \\
+        Operating Systems & 849 & 217 \\
+        Software & 3,216 & 806 \\
+        Antivirus and Malware & 3,415 & 854 \\
+        Network Security & 1,689 & 424 \\
+        Computer & 1,351 & 342 \\
+        Computer Components & 162 & 42 \\
+        Computer Networking & 226 & 58 \\
+        Linux & 389 & 97 \\
+        MacOS & 93 & 24 \\
+        Unix & 123 & 32 \\
+        Windows & 241 & 59 \\
+        Databases & 1,200 & 302 \\
+        Other & 10,009 & 2,502 \\
+        \hline
+    \end{tabular}
+\end{table}
 
 \section{Architecture}\label{sec:architecture}
 \begin{figure}
@@ -61,12 +86,12 @@ The proposed system is a hierarchical multi-label classification approach. It op
 
 Once the categories are fixed, a deterministic mapping is applied to the list to map each category to a node type in system graphs.
 
-
+Both systems output a set of public labels: the predicted high-level categories, the predicted subcategories of those categories, and \texttt{Other}. The following rules apply to both systems. If no high-level category is predicted, the post receives \texttt{Other}. \texttt{Other} is exclusive: when a mapped high-level category is predicted, \texttt{Other} is dropped. A subcategory classifier runs only on the posts whose predicted high-level categories contain its parent. Each subcategory classifier has an internal ``none of these'' class (\texttt{Other} at that level), which is dropped from the output: if no subcategory is predicted, the parent category is kept.
 
 \subsection{The Two-Step System}\label{subsec:two-step-system-mth}
 In the Two-Step System, there are two modules: the \textit{Filter module} filters out all the posts irrelevant to cybersecurity topics, and the \textit{Categorization module} assigns hierarchical categories to each post considered relevant for end users.
 
-Figure~\ref{fig:two-step-system} visually presents the system flow. Incoming posts are preprocessed by removing URLs, emails, mentions, and hashtags. Then, the embeddings are computed for each post, and the binary classification models predict its relevance. Then, the second module assigns categories to the posts predicted as relevant. The Categorization module is formed by two layers of models that classify posts into high-level categories (\texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, \texttt{Other}, and \texttt{Software}), and then classify posts into subcategories within the high-level categories, if applicable, as follows:
+Figure~\ref{fig:two-step-system} visually presents the system flow. Incoming posts are preprocessed by removing URLs, emails, mentions, and hashtags. Then, the embeddings are computed for each post, and the binary classification model predicts its relevance. A post rejected by the filter receives \texttt{Other}. The Categorization module assigns categories to the posts accepted by the filter. It is formed by two layers of models that classify posts into high-level categories (\texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, \texttt{Other}, and \texttt{Software}), and then classify posts into subcategories within the high-level categories, if applicable, as follows:
 
 \begin{itemize}
     \item \texttt{Computer Security} $\rightarrow$ \texttt{Antivirus and Malware}, \texttt{Network Security}
@@ -77,77 +102,71 @@ Figure~\ref{fig:two-step-system} visually presents the system flow. Incoming pos
 
 For example, if a post is classified under \texttt{Hardware}, it is re-evaluated for the specific subcategories like \texttt{Computer Components}. If no subcategory is applicable, the classification remains in the high-level category.
 
-\subsection{The One-Step System}\label{subsec:one-step-system}
-The One-Step System integrates Filtering and Categorization modules to increase the filter's performance and avoid error propagation into the category classifier. In this case, the CyberPosts target for the MLC task was manipulated by forcing the irrelevant posts to have category ``\texttt{Other}'', so in the training phase, the models will learn to predict a category whenever the post is relevant, and ``\texttt{Other}'' otherwise. So, the system consists of five primary models trained to classify posts into high-level categories and subcategories, like the Two-Step System.
+The top-level categorizer of the Two-Step System is trained on the relevant posts only, independently of the predictions of the filter.
 
-For example, given a list of posts, each post is processed by the embeddings and encoders. Then the models predict the categories among the high-level categories -- \texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, \texttt{Other}, and \texttt{Software}. As already said, the significant advantage of the One-Step System is that the filter and categorization modules are trained together because they are part of the same model. Consequently, when a post is recognized as irrelevant by the first layer category classifier, the model will assign only the category ``\texttt{Other}'' to the post, and the second layer category classifier will not be involved in the prediction. For all the relevant posts, the system will predict not only the high-level category but also the subcategories, and most importantly, it will not assign category ``\texttt{Other}'' to the relevant posts since it is forced to predict a category whenever the post is relevant.
+\subsection{The One-Step System}\label{subsec:one-step-system}
+The One-Step System integrates Filtering and Categorization modules, so that no separate filter is needed. The top-level categorizer is trained on all the posts, with the target defined by the taxonomy: a post that has no mapped category, whether it is irrelevant or relevant, has the label \texttt{Other}. The system therefore predicts a mapped category whenever one applies and \texttt{Other} otherwise. The subcategory classifiers are the same as those of the Two-Step System.
+
+Given a post, the top-level categorizer predicts the high-level categories among \texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, \texttt{Other}, and \texttt{Software}. When no mapped category is predicted, the post receives \texttt{Other} and the subcategory classifiers are not involved. Otherwise, the subcategory classifiers run for the predicted parents as described above. Since \texttt{Other} also covers relevant posts without a mapped category, a prediction of \texttt{Other} is not a decision of irrelevance. The relevance implied by the One-Step System is defined as the prediction of at least one mapped category.
 
 \section{Implementation and Setup}\label{sec:implementation-and-setup}
-In this section, the architecture implementation described in Section~\ref{sec:architecture} is presented, detailing the datasets used, the data preprocessing steps, the embedding models, the classification models, and the evaluation metrics employed to assess the models' performance.
-
-\subsection{Datasets}\label{subsec:datasets-imp-stp}
-\begin{figure}
-    \centering
-    \includegraphics[width=1\linewidth]{Images/behzadan_target_set_distribution}
-    \caption{\textbf{Distribution of Label-Sets in CyberPosts Dataset}.}
-    \label{fig:cyber-posts-target-set-distribution}
-\end{figure}
-
-Since the CyberPosts dataset is strongly imbalanced, as highlighted in Figure~\ref{fig:cyber-posts-target-distribution}, the models have many difficulties generalizing the information to new unseen data. Another plot that helps understand the challenges in training for methods such as the Label Powerset algorithm is the Figure~\ref{fig:cyber-posts-target-set-distribution}, where the label-set ``\texttt{(Other)}'' is the most common with 2,255 samples, followed by ``\texttt{(Computer Security, Antivirus and Malware)}'' with 1,674 samples and ``\texttt{(Network Security, Computer Security)}'' with 719 samples.
-
-Because of the distributions in Figure~\ref{fig:cyber-posts-target-distribution} and Figure~\ref{fig:cyber-posts-target-set-distribution}, it was expected to have higher performances with methods that did not consider the label dependencies, like the Binary Relevance algorithm, and lower performances with methods that considered the label dependencies, like the Label Powerset algorithm.
+In this section, the architecture implementation described in Section~\ref{sec:architecture} is presented, detailing the data preprocessing steps, the embedding models, the classification models and the selection protocol, and the evaluation protocol employed to assess the models' performance.
 
 \subsection{Data Preprocessing}\label{subsec:data-preprocessing}
 With the choice of not enhancing the posts with external information but the embeddings and encoders, there were defined models that only received text embeddings, so the embedding models had prior roles in the success of the training steps.
 
-Before feeding the texts to the embeddings, a data cleaning process was performed to remove all the noises from the posts. In particular, the emails, URLs, mentions, and hashtags were removed since they were not considered informative for the posts.
+Before feeding the texts to the embeddings, a data cleaning process was performed to remove all the noises from the posts. In particular, the emails, URLs, mentions, and hashtags were removed since they were not considered informative for the posts, and whitespace was collapsed. No other transformation was applied.
 
-For the training of the binary classification models, the posts were split into training and testing sets with an 80{\%} and 20{\%} ratio, respectively. The split was performed with the \texttt{train\_test\_split} function from the \texttt{scikit-learn} library by stratifying the data to ensure that the distribution of the classes was the same in both the training and testing sets.
+Many posts of CyberPosts are duplicates or truncated copies of each other. To prevent near-identical posts from falling on both sides of a split, posts are assigned to duplicate groups. The group key of a post is its text lowercased, without punctuation, and with one leading ``\texttt{rt}'' removed; groups whose keys are prefixes of one another (truncated copies, with a prefix of at least 40 characters) are merged. The 21,368 posts form 14,147 groups: 1,696 groups contain duplicates and cover 8,917 posts, and the largest group contains 251 posts.
 
-The datasets for training and evaluating the multi-label classification models depended on the architecture used. For the Two-Step System, the data were filtered to retain only the posts relevant to cybersecurity topics, independently of the predictions of the filter modules. For the One-Step System, the data were manipulated to force the irrelevant posts to have the category ``\texttt{Other}'', so all the posts were used to train the models.
+A single split, shared by all the experiments, divides the groups into a training and a test partition with an 80{\%} and 20{\%} ratio, using grouped iterative stratification on the relevance, top-level and subcategory labels, which assigns whole groups with a fixed seed (42). The training partition contains 17,097 posts in 11,272 groups, and the test partition 4,271 posts in 2,875 groups. The training groups are further divided into five grouped inner folds (3,400, 3,417, 3,414, 3,449, and 3,417 posts in 2,282, 2,188, 2,283, 2,231, and 2,288 groups, respectively), which are the only folds used for model selection and tuning. The test partition is used once, for the final evaluation of the selected models.
 
-For the training of the two multi-label classification architectures, the posts were split into training and testing sets with an 80{\%} and 20{\%} ratio, respectively. In this case, the label sets were stratified to ensure that the distribution of the label sets was the same in both the training and testing sets. However, the label sets were poorly distributed in the dataset, so the split required discarding the samples associated with rare label sets. In particular, only the posts with label sets with at least 20 samples were considered for the training and testing split.
-
+The datasets for training and evaluating the multi-label classification models depended on the architecture used. For the Two-Step System, the top-level categorizer uses only the relevant posts, and each subcategory classifier uses the relevant posts whose labeled high-level categories contain its parent. For the One-Step System, the top-level categorizer uses all the posts, with \texttt{Other} defined as in Section~\ref{sec:datasets-mtd}. The label sets were poorly distributed in the dataset, so the fitting rows of each multi-label model were restricted to the posts whose label-set has at least 20 samples. This rule is applied on each fitting partition separately: the inner training folds during selection, and the whole training partition for the final refit. The test rows are never used to apply the rule.
 
 \subsection{Embeddings Models}\label{subsec:embeddings-models}
-Across the experiments, the embeddings and encoders presented in Section~\ref{subsubsec:the-embeddings} were used: the embeddings to convert the posts into numerical vectors and the encoders to compute the post embeddings.
+Across the experiments, seven embedders presented in Section~\ref{subsubsec:the-embeddings} and Section~\ref{subsubsec:the-encoders} were used: the four GloVe embeddings (6B tokens, 50, 100, 200, and 300 dimensions) and the DistilRoBERTa, SBERT, and ATT{\&}CK-BERT encoders. Each post is embedded after the cleaning described above, and the embeddings are computed once for all the posts and shared by every experiment.
 
-The chosen GloVe{\footnote{\href{https://nlp.stanford.edu/projects/glove/}{GloVe: Global Vectors for Word Representation}}} embeddings contained six billion tokens. Whenever words were not in GloVe's vocabulary, they were discarded as they were translated into zero vectors. It was the same for all the GloVe versions, namely the 50, 100, 200, and 300-dimensions. Ideally, the 50-dimension embeddings only captured the general text semantics. Still, they should not be informative enough for tasks such as assigning categories potentially correlated to each other in computer science. For this reason, it was expected to notice higher performances with the 300-dimensional embeddings among all the four static embeddings.
+The chosen GloVe{\footnote{\href{https://nlp.stanford.edu/projects/glove/}{GloVe: Global Vectors for Word Representation}}} embeddings contained six billion tokens. The document vector of a post is the sum of the vectors of its lowercased tokens; tokens that are not in GloVe's vocabulary are ignored, and a post with no known token is mapped to the zero vector.
 
 Since static embeddings are not generally used in state-of-the-art natural language processing applications, the encoders were applied to compute the post embeddings.
 
-The SBERT{\footnote{\href{https://huggingface.co/sentence-transformers/all-mpnet-base-v2}{sentence-transformers/all-mpnet-base-v2}}} and DistilRoBERTa{\footnote{\href{https://huggingface.co/sentence-transformers/all-distilroberta-v1}{sentence-transformers/all-distilroberta-v1}}} were the first to be tested. Finally, the ATT{\&}CK-BERT{\footnote{\href{https://huggingface.co/basel/ATTACK-BERT}{basel/ATTACK-BERT}}} encoder was employed to increase accuracies and robustness. All of them were computed with the \texttt{sentence-transformers} library in Python.
+The SBERT{\footnote{\href{https://huggingface.co/sentence-transformers/all-mpnet-base-v2}{sentence-transformers/all-mpnet-base-v2}}}, DistilRoBERTa{\footnote{\href{https://huggingface.co/sentence-transformers/all-distilroberta-v1}{sentence-transformers/all-distilroberta-v1}}}, and ATT{\&}CK-BERT{\footnote{\href{https://huggingface.co/basel/ATTACK-BERT}{basel/ATTACK-BERT}}} encoders were computed with the \texttt{sentence-transformers} library in Python.
 
-\subsection{Classification Models}\label{subsec:classification-models}
-For the training of the \textbf{Filter module} of the Two-Step System, the binary classification models were used to predict the relevance of the posts.
+\subsection{Classification Models and Selection}\label{subsec:classification-models}
+All the choices below are made on the training partition only, using the grouped inner folds; the test partition is touched once, after the final models are fixed.
 
-There were constructed 28 models by combining the four embeddings presented in Section~\ref{subsubsec:the-embeddings} (GloVe 6B 50D, GloVe 6B 100D, GloVe 6B 200D, and GloVe 6B 300D), and three encoders presented in Section~\ref{subsubsec:the-encoders} (DistilRoBERTa, SBERT, and ATT{\&}CK-BERT) with the four base classifiers presented in Section~\ref{subsec:binary-classification} (Logistic Regression, Naïve Bayes, Random Forest, and XGBoost).
+For the \textbf{Filter module} of the Two-Step System, the binary classification models were used to predict the relevance of the posts. There were constructed 28 candidates by combining the seven embedders with the four base classifiers presented in Section~\ref{subsec:binary-classification} (Logistic Regression, Naïve Bayes, Random Forest, and XGBoost). Each candidate was implemented as a \texttt{scikit-learn} pipeline with a standard scaler as the first layer, fitted on the training folds only, and the classifier as the second layer. The standard scaler centers the mean of the embeddings to 0 and scales them to unit variance.
 
-Each model was implemented as a simple \texttt{scikit-learn} pipeline with a standard scaler as the first layer and the classifier as the second layer. The standard scaler only normalizes the data by centering the mean of the embeddings to 0 and their variance to a unit standard deviation. This normalization technique helps the algorithms in learning more efficiently without the need for scaling factors.
+The best candidate was selected based on the highest mean balanced accuracy over the five grouped inner folds. The selected candidate was then hyperparameter-tuned with the Tree-structured Parzen Estimator (TPE) Bayesian optimization of the \texttt{hyperopt} library, with 100 evaluations, using the same grouped cross-validation balanced accuracy on the training partition as the objective. The tuned model was refit on the whole training partition and evaluated once on the test partition and on NistPosts. As a predefined comparison, the untuned selected candidate was also evaluated on the test partition; it was never used for the choice. The cross-validation scores of all the candidates are selection diagnostics: being the best of 28, they are optimistically biased.
 
-The best model for the Filter module was selected based on the highest mean cross-validation accuracy, with a cross-validation of 5 folds. Once the model was identified, it was hyperparameter-tuned with a Bayesian optimization technique using the \texttt{hyperopt} library in Python.
+In the \textbf{Categorization module} and for both the architectures, multi-label problems require dedicated methods, so state-of-the-art methods for solving multi-label classification tasks were used. The multi-label classifiers are built with the methods presented in Section~\ref{subsec:multilabel-classification} (BR, CLR, CC, LP, PSt, MBR, RAkEL, and HOMER), following the pseudocode presented in \cite{zhang2014}, each combined with a base classifier among Logistic Regression, Decision Tree, and Random Forest, and a standard scaler. PSt is instantiated with pruning values 25, 50, and 100 and with 1 or 2 reintroduced label-sets; a configuration whose pruning value exceeds the largest label-set count of the fitting rows is infeasible and excluded.
 
-In the \textbf{Categorization module} and for both the architectures, the algorithms used for the binary classification task could not solve the problem, as for Logistic Regression, or were inefficient, as for Naïve Bayes, so state-of-the-art methods for solving multi-label classification tasks were used.
-
-The multi-label classifiers for assigning categories to relevant posts are built manually by following the pseudocode presented in \cite{zhang2014}. In this case, the methods used for facing the problem were the same as explained in Section~\ref{subsec:multilabel-classification} (BR, CLR, CC, LP, PSt, MBR, RAkEL, and HOMER), combined with each base classifier presented in Section~\ref{subsec:binary-classification}, for all the embeddings and encoders: there were trained more than 200 models.
-
-The best model for the Categorization module was selected based on the highest macro F1 score.
+The same protocol is applied to each level of the hierarchy (the top level of the Two-Step System, the top level of the One-Step System, and the four subcategory levels):
+\begin{enumerate}
+    \item for every embedder and every candidate (method and base classifier), one out-of-fold prediction is computed for each eligible training post with the five grouped inner folds, applying the label-set rule to the inner training folds;
+    \item for every embedder, each label takes the candidate with the highest pooled out-of-fold F1 on that label;
+    \item the embedder with the highest macro F1 of the resulting composed out-of-fold predictions, computed over the fixed classes of the level, is selected;
+    \item the selected per-label candidates are refit on all the eligible training posts and evaluated once on the test posts.
+\end{enumerate}
+The out-of-fold scores used in the selection are optimistic and are not reported as performance.
 
 \subsection{Evaluation Metrics}\label{subsec:evaluation-metrics}
 Different metrics were used to assess all the models and extract only those relevant to solving the two tasks (filter and categorization). The metrics include:
 \begin{itemize}
-    \item \textbf{Accuracy}. It is the number of correct classification predictions divided by the total number of predictions.
+    \item \textbf{Accuracy}. It is the number of correct classification predictions divided by the total number of predictions. In multi-label classification, \textbf{subset accuracy} requires the whole predicted label set of a post to match the true one.
+    \item \textbf{Balanced accuracy}. It is the mean of the recall of the two classes, which is robust to class imbalance; it is the selection metric of the Filter module.
     \item \textbf{Precision}. It is the proportion of all the model's positive classifications that are actually positive.
     \item \textbf{Recall} (or True Positive Rate, TPR). It is the proportion of all actual positives classified correctly as positives.
     \item \textbf{F1 score}. It is the harmonic mean of precision and recall. This metric balances the importance of precision and recall and is preferable to accuracy for class-imbalanced datasets. More broadly, when precision and recall are close in value, F1 will be close to their value. When precision and recall are far apart, F1 will be similar to whichever metric is worse.
-    \item \textbf{AUC} (Area Under the ROC Curve). It represents the probability that the model will rank the positive higher than the negative if given a randomly chosen positive and negative example.
+    \item \textbf{AUC} (Area Under the ROC Curve). It represents the probability that the model will rank the positive higher than the negative if given a randomly chosen positive and negative example. It is computed from the classifier scores; in multi-label classification, it is computed for each label and macro-averaged.
     \item \textbf{Hamming loss}. It is a metric that computes the fraction of wrong labels to the total number of labels. It is used in multi-label classification and penalizes only the individual labels. A lower Hamming loss indicates better performance.
     \item \textbf{Macro Averaging}. This approach independently computes metrics like precision, recall, and F1-score for each label and then averages them. It treats all labels equally, making it suitable when they are equally important, but it may not accurately reflect performance if label frequencies vary significantly.
-    \item \textbf{Micro Averaging}. This approach globally computes metrics by aggregating contributions from all labels. This method is more sensitive to labels with higher frequencies and is beneficial when labels have varying importance or imbalance. Notably, in multi-class evaluation, micro F1 is equivalent to accuracy.
-    \item \textbf{Sample-based Averaging}. This approach computes metrics for each instance individually and averages these scores across all instances. It provides a balanced view of precision and recall at the instance level, offering a nuanced assessment of model performance.
+    \item \textbf{Micro Averaging}. This approach globally computes metrics by aggregating contributions from all labels. This method is more sensitive to labels with higher frequencies and is beneficial when labels have varying importance or imbalance.
     \item \textbf{Weighted Averaging}. This approach computes metrics that account for the imbalance in class distribution by considering each class's support (i.e., the number of true instances). This approach ensures that the performance metrics -- such as precision, recall, and F1-score -- reflect the contribution of each class proportionally to its occurrence in the dataset.
 \end{itemize}
 
-For the Two-Step System, the metrics were computed for the filter and Categorization modules to evaluate the system's performance comprehensively. For the One-Step System, the metrics were calculated for the whole system, as the Filter and Categorization modules were integrated into a single model.
+\textbf{Populations.} The Filter module is evaluated on all the test posts and on NistPosts. Each categorization level is evaluated on the test posts of its training population (the relevant posts for the Two-Step levels, all the posts for the One-Step top level), with the gold labels as input: the results of each level measure the categorizer alone, independently of the upstream stages. Two populations are reported: all the test posts of the level, and the thesis-comparable subset, which keeps only the test posts whose label-set satisfies the 20-sample rule on the training partition. The One-Step top level also reports its implicit relevance, i.e. the binary metrics of the prediction of at least one mapped category against the gold relevance, together with the recall on the relevant posts without a mapped category.
 
-In particular, for the aggregated performances of the Two-Step System, the metrics of the Categorization module were evaluated only on the relevant posts, so the irrelevant posts were not considered in the evaluation.
+The two systems are evaluated end to end on all the test posts with the public labels (the mapped categories and \texttt{Other}), using the trained components as they are deployed: the Two-Step System runs the filter, the top-level categorizer, and the subcategory classifiers of the predicted parents, and the One-Step System runs its top-level categorizer and the same subcategory classifiers. Beyond the flattened micro and macro scores, the evaluation reports the per-label scores, the implicit relevance of each system, and routing counts (posts rejected by the filter, posts without a predicted category, \texttt{Other} conflicts, and sub-level ``none of these'' predictions). On NistPosts, the implicit relevance is evaluated per system: for the Two-Step System, a post is relevant if the filter accepts it and a mapped category is predicted; for the One-Step System, if a mapped category is predicted.
+
+\textbf{Statistics.} All the test metrics are accompanied by 95{\%} percentile bootstrap confidence intervals. Since duplicated posts are not independent, the resampling unit is the duplicate group of the split, whole groups being resampled with replacement; for NistPosts, which has no groups, rows are resampled. The intervals use 1,000 replicates for the components (Filter module and categorizers) and 10,000 replicates for the System evaluation. The two systems are compared with paired differences (Two-Step minus One-Step) computed on the same resamples; the micro F1 is the primary comparison, with the macro F1 and the subset accuracy as secondary ones. The intervals condition on the selected models: they quantify the sampling variability of the test partition, not the variability of model selection. The bootstrap settings and the primary comparison are part of the predefined evaluation protocol.
