@@ -379,16 +379,15 @@ class Providers(unittest.TestCase):
 class Loaders(unittest.TestCase):
     def _cats(self, levels=None, bad_level=None):
         def load(path, level, allow_non_production=False):
-            cls = TAX.classes(level)
-            cat = StubCat(bad_level if bad_level == level else level, cls,
-                          {c: 0 for c in cls}, embedder="X")
+            cls = TAX.classes("top" if level in ("general", "one step") else level)
+            cat = StubCat(level, cls, {c: 0 for c in cls}, embedder="X")
             if bad_level == level:
                 cat.level = "wrong"
             return cat, {"embedder": {"name": f"E-{level}", "fingerprint": {"sha": level}}}
         return load
 
-    def paths(self):
-        return {lv: f"/p/{lv}" for lv in ["top", *TAX.parents()]}
+    def paths(self, top="one step"):
+        return {lv: f"/p/{lv}" for lv in [top, *TAX.parents()]}
 
     def test_load_one_step_parses_sidecar(self):
         from unittest import mock
@@ -396,8 +395,9 @@ class Loaders(unittest.TestCase):
         with mock.patch.object(ct, "load_deployed_categoriser", self._cats()):
             s = sy.load_one_step(self.paths(), taxonomy=TAX)
         self.assertIsInstance(s, sy.OneStepSystem)
-        self.assertEqual(s.top.embedder, "E-top")
-        self.assertEqual(s.fingerprints["E-top"], {"sha": "top"})
+        self.assertEqual(s.top.embedder, "E-one step")
+        self.assertEqual((s.top.level, s.top.source_level), ("top", "one step"))
+        self.assertEqual(s.fingerprints["E-one step"], {"sha": "one step"})
         for p in TAX.parents():
             self.assertEqual(s.subs[p].embedder, f"E-{p}")
 
@@ -407,9 +407,10 @@ class Loaders(unittest.TestCase):
         with mock.patch.object(ct, "load_deployed_categoriser", self._cats()), \
                 mock.patch.object(fl, "load_deployed_filter",
                                   return_value=(StubFilter(), {"embedder": {"name": "EF", "fingerprint": {"sha": "f"}}})):
-            s = sy.load_two_step("/p/filter", self.paths(), taxonomy=TAX)
+            s = sy.load_two_step("/p/filter", self.paths("general"), taxonomy=TAX)
         self.assertEqual(s.filter.embedder, "EF")
         self.assertEqual(s.fingerprints["EF"], {"sha": "f"})
+        self.assertEqual(s.top.source_level, "general")
 
     def test_filter_without_embedder_needs_override(self):
         from unittest import mock
@@ -417,8 +418,8 @@ class Loaders(unittest.TestCase):
         with mock.patch.object(ct, "load_deployed_categoriser", self._cats()), \
                 mock.patch.object(fl, "load_deployed_filter", return_value=(StubFilter(), {})):
             with self.assertRaises(sy.SystemCompositionError):
-                sy.load_two_step("/p/filter", self.paths(), taxonomy=TAX)
-            s = sy.load_two_step("/p/filter", self.paths(), taxonomy=TAX, filter_embedder="EF")
+                sy.load_two_step("/p/filter", self.paths("general"), taxonomy=TAX)
+            s = sy.load_two_step("/p/filter", self.paths("general"), taxonomy=TAX, filter_embedder="EF")
         self.assertEqual(s.filter.embedder, "EF")
 
     def test_wrong_level_raises(self):
@@ -427,6 +428,33 @@ class Loaders(unittest.TestCase):
         with mock.patch.object(ct, "load_deployed_categoriser", self._cats(bad_level="hardware")):
             with self.assertRaises(sy.SystemCompositionError):
                 sy.load_one_step(self.paths(), taxonomy=TAX)
+
+    def test_two_step_needs_general_not_top(self):
+        from unittest import mock
+        from notebooks import categorisation as ct, filtering as fl
+        with mock.patch.object(ct, "load_deployed_categoriser", self._cats()), \
+                mock.patch.object(fl, "load_deployed_filter", return_value=(StubFilter(), {"embedder": "EF"})):
+            with self.assertRaises(sy.SystemCompositionError):
+                sy.load_two_step("/p/filter", self.paths("top"), taxonomy=TAX)
+
+    def test_source_level_mismatch_raises(self):
+        top_cls = TAX.classes("top")
+        cat = StubCat("one step", top_cls, TOPCOL, embedder="E")
+        sy.CategoriserAdapter(cat, "top", "E", None, TAX, source_level="one step")
+        with self.assertRaises(sy.SystemCompositionError):
+            sy.CategoriserAdapter(cat, "top", "E", None, TAX, source_level="general")
+        with self.assertRaises(sy.SystemCompositionError):
+            sy.CategoriserAdapter(cat, "top", "E", None, TAX)      # default source_level = level = "top"
+
+    def test_hook_and_shared_subs(self):
+        from unittest import mock
+        from notebooks import categorisation as ct
+        seen = []
+        with mock.patch.object(ct, "load_deployed_categoriser", self._cats()):
+            a = sy.load_one_step(self.paths(), taxonomy=TAX, hook=lambda c, p, m, ad: seen.append(c))
+            b = sy.load_one_step({"one step": "/p/x"}, taxonomy=TAX, subs=a.subs)
+        self.assertEqual(sorted(seen), sorted(["one step", *TAX.parents()]))
+        self.assertIs(b.subs["hardware"], a.subs["hardware"])
 
     def test_missing_level_raises(self):
         from unittest import mock

@@ -1,0 +1,33 @@
+# Declarative configuration of the locked System evaluation (notebooks/SystemLabelAssignment.ipynb,
+# notebooks/system_pipeline.py). PRECOMMITTED: these values must not change after results have been seen.
+
+[bootstrap]
+# Group bootstrap of the manifest test groups (Cotov: rows), percentile CIs; seed as in categorisation.toml.
+B = 10000
+seed = 20241102
+level = 0.95
+
+# Paired comparisons (A minus B) evaluated on the same resamples; the first is the primary one.
+compare = [["two_step", "one_step"]]
+
+[filter]
+pickle_env = "FILTER_PICKLE"   # env var naming the deployed filter pickle
+
+[systems]
+# Categoriser level (a key of [levels]) used as the TOP level of each system; the four sub levels
+# (the taxonomy parents) are shared by both systems and must be keys of [levels] too.
+two_step_top = "general"
+one_step_top = "one step"
+
+[levels]
+# categoriser level -> env var holding the path of its deployed pickle (sidecar = <pickle>.json)
+"general" = "CATEGORISER_GENERAL"
+"computer security" = "CATEGORISER_COMPUTER_SECURITY"
+"hardware" = "CATEGORISER_HARDWARE"
+"operating systems" = "CATEGORISER_OPERATING_SYSTEMS"
+"software" = "CATEGORISER_SOFTWARE"
+"one step" = "CATEGORISER_ONE_STEP"
+
+[smoke]
+# SYSTEM_SMOKE=1: NON-PRODUCTION check of the whole flow; never writes the production outputs.
+B = 50

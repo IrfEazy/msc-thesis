@@ -37,7 +37,7 @@ gpu_poll_interval = 60  # seconds between status polls while waiting
 setup_commands = [["{python}", "-c", "import nltk, sys; pkgs = sys.argv[1:]; failed = [p for p in pkgs if not nltk.download(p, quiet=True)]; sys.exit(f'nltk download failed: {failed}' if failed else 0)", "punkt", "punkt_tab", "wordnet", "omw-1.4", "stopwords", "averaged_perceptron_tagger", "averaged_perceptron_tagger_eng", "universal_tagset"]]
 dataset_ready_timeout = 900  # seconds to wait for each pushed dataset to become ready
 # Repo paths copied into the code dataset (directories: only *.py files).
-code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "notebooks/checkpoints.py", "notebooks/textprep.py", "notebooks/taxonomy.py", "notebooks/taxonomy.toml", "notebooks/splits.py", "notebooks/embeddings.py", "notebooks/embedders.toml", "notebooks/filtering.py", "notebooks/filter.toml", "notebooks/categorisation.py", "notebooks/categorisation.toml", "requirements-kaggle.txt"]
+code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "notebooks/checkpoints.py", "notebooks/textprep.py", "notebooks/taxonomy.py", "notebooks/taxonomy.toml", "notebooks/splits.py", "notebooks/embeddings.py", "notebooks/embedders.toml", "notebooks/filtering.py", "notebooks/filter.toml", "notebooks/categorisation.py", "notebooks/categorisation.toml", "notebooks/system.py", "notebooks/system_eval.py", "notebooks/system_pipeline.py", "notebooks/system.toml", "requirements-kaggle.txt"]
 # Copied into the data dataset.
 data = [
   { src = "data/tweets-dataset", dest = "tweets-dataset" },
@@ -1572,14 +1572,44 @@ SPLIT_TEST_CSV = "{repo}/runs/splits/data/split_test.csv"
 SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
 EMBEDDINGS_DIR = "{repo}/runs/kaggle/msc-thesis-embeddings/embeddings"
 
+# Locked System evaluation (notebooks/SystemLabelAssignment.ipynb, config notebooks/system.toml, logic notebooks/system_pipeline.py):
+# a CPU kernel chaining the embeddings, the filter and the six categoriser assembles; no training. Cotov labels come from
+# the attached dataset (a production run without Cotov fails unless SYSTEM_ALLOW_NO_COTOV=1). Outputs: system_performance.json
+# and system_predictions.csv under {working}/system.
 [[notebooks]]
 name = "SystemLabelAssignment"
 path = "notebooks/SystemLabelAssignment.ipynb"
 target = "kaggle"
-accelerator = "gpu"
-inputs = ["models/filter.pkl", "models/general.pkl", "models/fine_grained_computer_security.pkl", "data/tweets-dataset-for-cyberattack-detection/tweets_test.csv"]
-blocked = "inputs lost: models/general.pkl and models/fine_grained_computer_security.pkl come from the group-3 notebooks whose inputs (tweets_train.csv, sub_tweets_train.pkl) are lost; Two-Step table unverifiable"
-notes = "Anastasia/Cotov section (data/anastasia.csv) is unavailable and reports blocked."
+accelerator = "none"
+notes = "Evaluates the deployed Two-Step and One-Step systems once on the shared test split (group-bootstrap CIs, paired difference, Cotov relevance); fails closed on any unverified artifact."
+
+[notebooks.env]
+ROOT = "{repo}"
+RANDOM_STATE = "42"
+OVERWRITE = "true"
+SPLIT_MANIFEST_CSV = "{input:msc-thesis-data}/splits/split_manifest.csv"
+SPLIT_TRAIN_CSV = "{input:msc-thesis-data}/splits/split_train.csv"
+SPLIT_TEST_CSV = "{input:msc-thesis-data}/splits/split_test.csv"
+SPLIT_MANIFEST_SHA256 = "9f8b62852c14bccca294ea4c3bf1b5c554bb5272e2b066ba3d103d77041d76a0"
+EMBEDDINGS_DIR = "{input:msc-thesis-embeddings}/embeddings"
+FILTER_PICKLE = "{input:msc-thesis-filter}/models/filter.pkl"
+CATEGORISER_GENERAL = "{input:msc-thesis-cat-general-assemble}/models/categoriser_general.pkl"
+CATEGORISER_COMPUTER_SECURITY = "{input:msc-thesis-cat-computer-security-assemble}/models/categoriser_computer_security.pkl"
+CATEGORISER_HARDWARE = "{input:msc-thesis-cat-hardware-assemble}/models/categoriser_hardware.pkl"
+CATEGORISER_OPERATING_SYSTEMS = "{input:msc-thesis-cat-operating-systems-assemble}/models/categoriser_operating_systems.pkl"
+CATEGORISER_SOFTWARE = "{input:msc-thesis-cat-software-assemble}/models/categoriser_software.pkl"
+CATEGORISER_ONE_STEP = "{input:msc-thesis-cat-onestep-assemble}/models/categoriser_one_step.pkl"
+COTOV_CSV = "{input:anastasias-twitter-dataset}/anastasia.csv"
+SYSTEM_OUT_DIR = "{working}/system"
+
+[notebooks.kaggle]
+slug = "msc-thesis-system"
+datasets = ["irfancela/msc-thesis-code", "irfancela/msc-thesis-data", "irfancela/anastasias-twitter-dataset"]
+kernels = ["msc-thesis-embeddings", "msc-thesis-filter", "msc-thesis-cat-general-assemble", "msc-thesis-cat-computer-security-assemble", "msc-thesis-cat-hardware-assemble", "msc-thesis-cat-operating-systems-assemble", "msc-thesis-cat-software-assemble", "msc-thesis-cat-onestep-assemble"]
+accelerator = "none"
+internet = true
+cwd = "{repo}"
+outputs_dirs = ["system"]
 
 [[notebooks]]
 name = "MultiLabelClassificationSMOTE"

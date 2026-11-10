@@ -120,16 +120,21 @@ class CategoriserAdapter:
     """Deployed categoriser of one level, columns re-ordered to the taxonomy class order by name."""
 
     def __init__(self, categoriser, level: str, embedder: Optional[str] = None,
-                 fingerprint: Optional[Mapping] = None, taxonomy: Optional[_tx.Taxonomy] = None):
+                 fingerprint: Optional[Mapping] = None, taxonomy: Optional[_tx.Taxonomy] = None,
+                 source_level: Optional[str] = None):
+        """``level`` is the taxonomy level (``top`` or a parent); ``source_level`` the level the deployed
+        categoriser was trained for (sidecar/pickle name, e.g. ``general`` or ``one step``; default ``level``)."""
         tx = taxonomy or _tx.default_taxonomy()
+        source_level = level if source_level is None else source_level
         want = tx.classes(level)
         have = list(categoriser.classes)
         if len(have) != len(set(have)) or set(have) != set(want):
             raise SystemCompositionError(f"{level}: categoriser classes {have} differ from taxonomy classes {want}")
-        have_level = getattr(categoriser, "level", level)
-        if have_level != level:
-            raise SystemCompositionError(f"categoriser level {have_level!r} != {level!r}")
+        have_level = getattr(categoriser, "level", source_level)
+        if have_level != source_level:
+            raise SystemCompositionError(f"categoriser level {have_level!r} != {source_level!r}")
         self.categoriser, self.level, self.classes = categoriser, level, tuple(want)
+        self.source_level = source_level
         self.embedder = embedder or categoriser.embedder
         self.fingerprint = fingerprint
         self._cols = [have.index(c) for c in want]
@@ -225,6 +230,8 @@ class SystemResult:
         out["parent_without_child"] = {p: int(v.sum()) for p, v in self.parent_without_child.items()}
         return out
 
+
+TWO_STEP_LEVEL, ONE_STEP_LEVEL = "general", "one step"   # deployed level names of the top categorisers
 
 # --------------------------------------------------------------------------- systems
 class _Base:
@@ -344,33 +351,48 @@ class OneStepSystem(_Base):
 
 
 # --------------------------------------------------------------------------- loaders
-def _load_categorisers(paths: Mapping[str, Any], tx, allow_non_production: bool):
+ComponentHook = Callable[[str, Any, Mapping, Any], None]   # (component, path, sidecar metadata, adapter)
+
+
+def _load_categorisers(paths: Mapping[str, Any], top_level: str, tx, allow_non_production: bool,
+                       hook: Optional[ComponentHook] = None, subs: Optional[Mapping[str, CategoriserAdapter]] = None):
+    """``paths`` is keyed by the real deployed level names (top: ``top_level``); ``subs`` reuses loaded sub adapters."""
     from notebooks import categorisation as ct
-    need = [_tx.TOP, *tx.parents()]
+    need = [top_level] + ([] if subs is not None else list(tx.parents()))
     if set(paths) != set(need):
         raise SystemCompositionError(f"categoriser_paths levels {sorted(paths)} != required {sorted(need)}")
     out = {}
     for level in need:
         cat, meta = ct.load_deployed_categoriser(paths[level], level, allow_non_production=allow_non_production)
         name, fp = _as_name(meta, getattr(cat, "embedder", None))
-        out[level] = CategoriserAdapter(cat, level, name, fp, tx)
-    return out.pop(_tx.TOP), out
+        taxo = _tx.TOP if level == top_level else level
+        out[level] = CategoriserAdapter(cat, taxo, name, fp, tx, source_level=level)
+        if hook:
+            hook(level, paths[level], meta, out[level])
+    top = out.pop(top_level)
+    return top, (dict(subs) if subs is not None else out)
 
 
-def load_one_step(categoriser_paths: Mapping[str, Any], *, taxonomy=None,
-                  allow_non_production: bool = False) -> OneStepSystem:
+def load_one_step(categoriser_paths: Mapping[str, Any], *, taxonomy=None, allow_non_production: bool = False,
+                  hook: Optional[ComponentHook] = None, subs=None) -> OneStepSystem:
+    """Paths keyed by real level names: top ``one step`` plus the taxonomy parents (omit them when ``subs`` given)."""
     tx = taxonomy or _tx.default_taxonomy()
-    top, subs = _load_categorisers(categoriser_paths, tx, allow_non_production)
+    top, subs = _load_categorisers(categoriser_paths, ONE_STEP_LEVEL, tx, allow_non_production, hook, subs)
     return OneStepSystem(top, subs, tx)
 
 
 def load_two_step(filter_path, categoriser_paths: Mapping[str, Any], *, taxonomy=None,
-                  filter_embedder: Optional[str] = None, allow_non_production: bool = False) -> TwoStepSystem:
+                  filter_embedder: Optional[str] = None, allow_non_production: bool = False,
+                  hook: Optional[ComponentHook] = None, subs=None) -> TwoStepSystem:
+    """Paths keyed by real level names: top ``general`` plus the taxonomy parents (omit them when ``subs`` given)."""
     from notebooks import filtering as fl
     tx = taxonomy or _tx.default_taxonomy()
     model, meta = fl.load_deployed_filter(filter_path)
     name, fp = _as_name(meta, filter_embedder)
     if not name:
         raise SystemCompositionError("filter sidecar names no embedder; pass filter_embedder")
-    top, subs = _load_categorisers(categoriser_paths, tx, allow_non_production)
-    return TwoStepSystem(FilterAdapter(model, name, fp), top, subs, tx)
+    fad = FilterAdapter(model, name, fp)
+    if hook:
+        hook("filter", filter_path, meta, fad)
+    top, subs = _load_categorisers(categoriser_paths, TWO_STEP_LEVEL, tx, allow_non_production, hook, subs)
+    return TwoStepSystem(fad, top, subs, tx)
