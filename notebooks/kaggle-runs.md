@@ -2,6 +2,24 @@
 
 Full runs of the Kaggle notebooks (owner `irfancela`; T4 GPU for the 2026-10 runs, CPU kernels since the rebuild). Outputs are in `runs/kaggle/<slug>/` (gitignored); durations and metrics are taken from the fetched kernel logs. Add an entry for each new full run.
 
+## 2026-11-08 to 2026-11-10: One-Step categorisation (CPU kernels)
+Code 18afe65/16cfaa3 (code dataset versioned at 689123d; 044a063 and 3e383b4 changed only `experiments.toml`, so the checkpoint identity is the same). Level `one step` of `categorisation` on all corpus rows; durations from the kernel logs; `done/total` = candidate-fold checkpoints.
+
+| Kernel | Status | Duration | Checkpoints |
+|---|---|---|---|
+| `msc-thesis-cat-onestep-train-glove{50,100,200,300}` | COMPLETE | 1.8 / 3.6 / 6.4 / 8.0 h | 195/195 each |
+| `msc-thesis-cat-onestep-train-{distilroberta,sbert,attackbert}` | INCOMPLETE (budget) | 9.8 / 9.7 / 9.7 h | 138 / 87 / 108 of 195, 0 failed |
+| `msc-thesis-cat-onestep-train2-{distilroberta,sbert,attackbert}` (continuations, commit 044a063) | INCOMPLETE (budget) | 9.4 / 9.7 / 9.5 h | 170 / 164 / 164 of 195, 0 failed |
+| `msc-thesis-cat-onestep-train3-{distilroberta,sbert,attackbert}` (continuations, commit 3e383b4) | COMPLETE | 3.7 / 7.2 / 7.9 h | 195/195 each, 0 failed |
+| `msc-thesis-cat-onestep-assemble` (2026-11-10, all 13 shards) | COMPLETE (published) | 2.7 h | 1365 |
+
+Results (test, 95% group-bootstrap CIs, B 1000; outputs in `runs/kaggle/msc-thesis-cat-onestep-assemble/models/`): selected embedder SBERT; all rows n 4271: micro F1 0.715 [0.693, 0.736], macro F1 0.553 [0.515, 0.591], macro ROC AUC 0.812, subset accuracy 0.621; thesis-comparable n 4267: micro F1 0.716 [0.693, 0.737], macro F1 0.554 [0.509, 0.593]. Per-label test F1: computer security 0.624, hardware 0.346, networking 0.330, operating systems 0.485, software 0.686, other 0.846. Implicit relevance vs gold relevance (all rows): balanced accuracy 0.733 [0.711, 0.754], precision 0.840, recall 0.587, F1 0.691 [0.659, 0.722], ROC AUC 0.796; recall 0.696 on relevant-mapped (n 1769) and 0.160 on relevant-unmapped (n 451) rows; 172 empty predictions, 227 `other` + real-label predictions. OOF composed macro F1 per embedder (selection scores, optimistic): GloVe 50/100/200/300 0.523/0.517/0.541/0.554, DistilRoBERTa 0.580, ATT&CK-BERT 0.584, SBERT 0.597.
+
+Problems on the way:
+- The transformer shards needed three sessions each: MBR[RF]/MBR[DT] took about 3.5 h per shard and the longest single task about 53 min, far more than the general level.
+- The local PC crashed during the train3 watch loop (2026-11-10); Kaggle was unaffected and the outputs were re-fetched by hand.
+- Session artifacts (pipeline run, loop logs): `runs/sessions/2026-11-07-onestep/`.
+
 ## 2026-11-03 to 2026-11-07: Two-Step categorisation (CPU kernels)
 Code 914067e (notebook and config; 60f32a7 changed only `scripts/` and the computer security transformers slug, so the checkpoint identity is the same). Durations from the kernel logs; `done/total` = candidate-fold checkpoints.
 
