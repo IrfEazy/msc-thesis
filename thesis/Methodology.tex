@@ -41,7 +41,7 @@ The CyberPosts dataset has different columns that can interest the implementatio
 
 The Watson categories are mapped through a fixed taxonomy to the labels of the system: five high-level categories (\texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, and \texttt{Software}) and, below four of them, the subcategories listed in Section~\ref{subsec:two-step-system-mth}. The label \texttt{Other} marks the posts with no mapped category: it covers both the irrelevant posts and the relevant posts whose Watson categories do not map to any node of the taxonomy. Consequently, \texttt{Other} is not equivalent to irrelevance, and it is exclusive: it is never assigned together with a mapped category.
 
-Table~\ref{tab:label-counts} reports the label counts of the CyberPosts dataset in the training and test partitions defined in Section~\ref{subsec:data-preprocessing}. The labels are strongly imbalanced: \texttt{Other} is the most frequent label, and \texttt{Computer Security} is the most frequent mapped one. The most frequent label-sets (training and test partitions together) are ``\texttt{(Other)}'' with 12,511 posts, ``\texttt{(Computer Security, Antivirus and Malware)}'' with 1,702 posts, and ``\texttt{(Computer Security, Network Security)}'' with 719 posts. Such a distribution makes label-set-based methods such as Label Powerset harder to train, and many label-sets are too rare to learn from, which motivates the label-set frequency rule of Section~\ref{subsec:data-preprocessing}.
+Table~\ref{tab:label-counts} and Figure~\ref{fig:label-distribution} report the label counts of the CyberPosts dataset in the training and test partitions defined in Section~\ref{subsec:data-preprocessing}. The labels are strongly imbalanced: \texttt{Other} is the most frequent label, and \texttt{Computer Security} is the most frequent mapped one. The most frequent label-sets (training and test partitions together) are ``\texttt{(Other)}'' with 12,511 posts, ``\texttt{(Computer Security, Antivirus and Malware)}'' with 1,702 posts, and ``\texttt{(Computer Security, Network Security)}'' with 719 posts. Such a distribution makes label-set-based methods such as Label Powerset harder to train, and many label-sets are too rare to learn from, which motivates the label-set frequency rule of Section~\ref{subsec:data-preprocessing}. Figure~\ref{fig:labelset-distribution} shows the most frequent label-sets.
 
 \begin{table}
     \centering
@@ -74,12 +74,26 @@ Table~\ref{tab:label-counts} reports the label counts of the CyberPosts dataset 
     \end{tabular}
 \end{table}
 
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{Images/cyberposts_label_distribution}
+    \caption{\textbf{Public label counts in CyberPosts} (training and test partitions).}
+    \label{fig:label-distribution}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{Images/cyberposts_labelset_distribution}
+    \caption{\textbf{Most frequent public label-sets in CyberPosts} (training and test partitions together).}
+    \label{fig:labelset-distribution}
+\end{figure}
+
 \section{Architecture}\label{sec:architecture}
 \begin{figure}
     \centering
-    \includegraphics[width=\linewidth]{Images/system-schema-horizontal-new}
-    \caption{\textbf{The Two-Step System's Architecture}.}
-    \label{fig:two-step-system}
+    \input{Images/system-architecture}
+    \caption{\textbf{The architecture of the two systems}. (a) The Two-Step System: a binary filter separates the posts that receive \texttt{Other} from those sent to the top-level categoriser. (b) The One-Step System: the top-level categoriser, trained on all the posts, replaces the filter. In both systems, a post with no mapped category receives \texttt{Other}, and the subcategory classifiers run for the predicted parents.}
+    \label{fig:system-architecture}
 \end{figure}
 
 The proposed system is a hierarchical multi-label classification approach. It operates in two structured levels: an initial classification into broad categories and a secondary classification into subcategories when applicable. This architecture ensures an interpretable classification process and enhances the precision of the multi-label classification predictions.
@@ -91,7 +105,7 @@ Both systems output a set of public labels: the predicted high-level categories,
 \subsection{The Two-Step System}\label{subsec:two-step-system-mth}
 In the Two-Step System, there are two modules: the \textit{Filter module} filters out all the posts irrelevant to cybersecurity topics, and the \textit{Categorization module} assigns hierarchical categories to each post considered relevant for end users.
 
-Figure~\ref{fig:two-step-system} visually presents the system flow. Incoming posts are preprocessed by removing URLs, emails, mentions, and hashtags. Then, the embeddings are computed for each post, and the binary classification model predicts its relevance. A post rejected by the filter receives \texttt{Other}. The Categorization module assigns categories to the posts accepted by the filter. It is formed by two layers of models that classify posts into high-level categories (\texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, \texttt{Other}, and \texttt{Software}), and then classify posts into subcategories within the high-level categories, if applicable, as follows:
+Figure~\ref{fig:system-architecture} visually presents the system flow. Incoming posts are preprocessed by removing URLs, emails, mentions, and hashtags. Then, the embeddings are computed for each post, and the binary classification model predicts its relevance. A post rejected by the filter receives \texttt{Other}. The Categorization module assigns categories to the posts accepted by the filter. It is formed by two layers of models that classify posts into high-level categories (\texttt{Computer Security}, \texttt{Hardware}, \texttt{Networking}, \texttt{Operating Systems}, \texttt{Other}, and \texttt{Software}), and then classify posts into subcategories within the high-level categories, if applicable, as follows:
 
 \begin{itemize}
     \item \texttt{Computer Security} $\rightarrow$ \texttt{Antivirus and Malware}, \texttt{Network Security}
