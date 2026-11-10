@@ -219,292 +219,78 @@ I risultati forniscono indicazioni preziose per lo sviluppo di strumenti di cybe
 
 
 \chapter{Appendix A}\label{ch:appendix-a}
-\section{Classification System Performance Analysis}\label{sec:classification-system-performance-analysis}
-This appendix comprehensively analyzes various text classification systems implemented in this study. All systems follow a One-Step architecture, which directly categorizes input text into predefined categories. The systems differ in their embedding approaches, with GloVe embeddings of varying dimensions (50D, 100D, 200D, 300D) and SBERT embeddings being evaluated.
+\section{Selection Diagnostics}\label{sec:selection-diagnostics}
+This appendix reports the scores used to select the embedder and the per-label candidates of each categorization level (Section~\ref{subsec:classification-models}). They are computed out of fold on the training partition and are the maximum over many candidates: they are optimistic selection scores and must not be read as test results, which are reported in Chapter~\ref{ch:experimental-results}. The Filter selection diagnostics are in Table~\ref{tab:filter-module}.
 
-\subsection{One-Step GloVe.6B.50D System}
-The One-Step GloVe.6B.50D system utilizes 50-dimensional GloVe word embeddings trained on a corpus of 6 billion tokens. This system achieved an overall accuracy of 58.64{\%} with a hamming loss of 0.084.
-
-\begin{table}
-    \centering
-    \begin{tabular}{|r|rrrrr||}
-        \hline
-                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
-        \hline
-        \textbf{Computer Security}     & 0.93               & 0.37            & 0.53              & 0.67         & 1738             \\
-        \textbf{Hardware}              & 0.96               & 0.35            & 0.51              & 0.67         & 461              \\
-        \textbf{Networking}            & 0.96               & 0.31            & 0.47              & 0.66         & 240              \\
-        \textbf{Operating Systems}     & 0.92               & 0.56            & 0.69              & 0.78         & 156              \\
-        \textbf{Other}                 & 0.53               & 0.98            & 0.69              & 0.70         & 1603             \\
-        \textbf{Software}              & 0.92               & 0.53            & 0.67              & 0.76         & 950              \\
-        \textbf{Antivirus and Malware} & 0.91               & 0.45            & 0.60              & 0.72         & 1110             \\
-        \textbf{Network Security}      & 0.87               & 0.25            & 0.39              & 0.62         & 817              \\
-        \textbf{Linux}                 & 0.96               & 0.65            & 0.78              & 0.82         & 77               \\
-        \textbf{MacOS}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
-        \textbf{Unix}                  & 0.90               & 0.64            & 0.75              & 0.82         & 14               \\
-        \textbf{Windows}               & 0.84               & 0.46            & 0.59              & 0.73         & 46               \\
-        \textbf{Databases}             & 0.85               & 0.63            & 0.72              & 0.81         & 342              \\
-        \textbf{Computer}              & 0.90               & 0.36            & 0.51              & 0.68         & 362              \\
-        \textbf{Computer Components}   & 0.92               & 0.32            & 0.47              & 0.66         & 38               \\
-        \textbf{Computer Networking}   & 1.00               & 0.34            & 0.51              & 0.67         & 38               \\
-        \hline
-        \hline
-        \textbf{Micro Avg}             & 0.72               & 0.52            & 0.61              & 0.75         & 8005             \\
-        \textbf{Macro Avg}             & 0.90               & 0.48            & 0.59              & 0.72         & 8005             \\
-        \textbf{Weighted Avg}          & 0.84               & 0.52            & 0.58              & 0.70         & 8005             \\
-        \textbf{Samples Avg}           & 0.63               & 0.62            & 0.62              & 0.79         & 8005             \\
-        \hline
-        \multicolumn{6}{l}{\textbf{Accuracy:} 58.64\%}                                                                              \\
-        \multicolumn{6}{l}{\textbf{Hamming Loss:} 0.084}                                                                            \\
-        \hline
-        \hline
-    \end{tabular}
-    \caption{\textbf{One-Step GloVe.6B.50D System Performances}.}
-\end{table}
-
-\subsubsection*{Strengths}
-\begin{itemize}
-    \item High precision across most categories (average precision of 0.90)
-    \item Particularly strong precision for specialized categories like ``\texttt{Computer Networking}'' (1.00) and ``\texttt{MacOS}'' (1.00)
-    \item Good performance on ``\texttt{Operating Systems}'' (F1-Score: 0.69) and ``\texttt{Linux}'' (F1-Score: 0.78)
-\end{itemize}
-
-\subsubsection*{Weaknesses}
-\begin{itemize}
-    \item Generally low recall across most categories (average recall of 0.48)
-    \item Poor performance on ``\texttt{Network Security}'' (F1-Score: 0.39)
-    \item Significant imbalance between precision and recall for ``\texttt{Computer Security}'' (0.93 vs 0.37)
-\end{itemize}
-
-\subsection{One-Step GloVe.6B.100D System}
-The One-Step GloVe.6B.100D system employs 100-dimensional GloVe word embeddings. This system achieved an overall accuracy of 57.95{\%} with a hamming loss of 0.085.
+\subsection{Embedder Selection}
+Table~\ref{tab:oof-embedders} reports, for each level, the macro F1 of the composed out-of-fold predictions of each embedder; the selected embedder is the one with the highest value (in bold).
 
 \begin{table}
     \centering
-    \begin{tabular}{|r|rrrrr||}
+    \caption{\textbf{Composed out-of-fold macro F1 of each embedder} at each categorization level (selection scores on the training partition).}
+    \label{tab:oof-embedders}
+    \footnotesize
+    \resizebox{\textwidth}{!}{\begin{tabular}{lccccccc}
         \hline
-                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \textbf{Level} & \textbf{GloVe 50D} & \textbf{GloVe 100D} & \textbf{GloVe 200D} & \textbf{GloVe 300D} & \textbf{DistilRoBERTa} & \textbf{SBERT} & \textbf{ATT{\&}CK-BERT} \\
         \hline
-        \textbf{Computer Security}     & 0.94               & 0.34            & 0.50              & 0.66         & 1738             \\
-        \textbf{Hardware}              & 0.96               & 0.35            & 0.51              & 0.67         & 461              \\
-        \textbf{Networking}            & 0.96               & 0.31            & 0.47              & 0.65         & 240              \\
-        \textbf{Operating Systems}     & 0.93               & 0.54            & 0.69              & 0.77         & 156              \\
-        \textbf{Other}                 & 0.52               & 0.99            & 0.68              & 0.70         & 1603             \\
-        \textbf{Software}              & 0.92               & 0.54            & 0.68              & 0.76         & 950              \\
-        \textbf{Antivirus and Malware} & 0.92               & 0.41            & 0.56              & 0.70         & 1110             \\
-        \textbf{Network Security}      & 0.88               & 0.25            & 0.38              & 0.62         & 817              \\
-        \textbf{Linux}                 & 0.96               & 0.62            & 0.76              & 0.81         & 77               \\
-        \textbf{MacOS}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
-        \textbf{Unix}                  & 0.90               & 0.64            & 0.75              & 0.82         & 14               \\
-        \textbf{Windows}               & 0.87               & 0.43            & 0.58              & 0.72         & 46               \\
-        \textbf{Databases}             & 0.87               & 0.63            & 0.73              & 0.81         & 342              \\
-        \textbf{Computer}              & 0.91               & 0.36            & 0.52              & 0.68         & 362              \\
-        \textbf{Computer Components}   & 0.92               & 0.32            & 0.47              & 0.66         & 38               \\
-        \textbf{Computer Networking}   & 1.00               & 0.37            & 0.54              & 0.68         & 38               \\
+        Two-Step general & 0.549 & 0.534 & 0.568 & 0.582 & 0.596 & 0.598 & \textbf{0.607} \\
+        Computer Security & 0.594 & 0.610 & \textbf{0.696} & 0.669 & 0.619 & 0.630 & 0.647 \\
+        Hardware & 0.589 & 0.611 & 0.619 & 0.646 & 0.666 & \textbf{0.695} & 0.681 \\
+        Operating Systems & 0.695 & 0.731 & 0.736 & 0.743 & \textbf{0.827} & 0.784 & 0.777 \\
+        Software & 0.745 & 0.772 & 0.796 & 0.791 & \textbf{0.802} & 0.794 & 0.796 \\
+        One-Step top level & 0.523 & 0.517 & 0.541 & 0.554 & 0.580 & \textbf{0.597} & 0.584 \\
         \hline
-        \hline
-        \textbf{Micro Avg}             & 0.71               & 0.51            & 0.60              & 0.74         & 8005             \\
-        \textbf{Macro Avg}             & 0.90               & 0.47            & 0.59              & 0.72         & 8005             \\
-        \textbf{Weighted Avg}          & 0.84               & 0.51            & 0.57              & 0.69         & 8005             \\
-        \textbf{Samples Avg}           & 0.62               & 0.61            & 0.61              & 0.79         & 8005             \\
-        \hline
-        \multicolumn{6}{l}{\textbf{Accuracy:} 57.95\%}                                                                              \\
-        \multicolumn{6}{l}{\textbf{Hamming Loss:} 0.085}                                                                            \\
-        \hline
-        \hline
-    \end{tabular}
-    \caption{\textbf{One-Step GloVe.6B.100D System Performances}.}
+    \end{tabular}}
 \end{table}
 
-\subsubsection*{Strengths}
-\begin{itemize}
-    \item Maintains high precision across categories (macro average: 0.90)
-    \item Perfect precision for ``\texttt{MacOS}'' and ``\texttt{Computer Networking}'' categories
-    \item Strong performance on ``\texttt{Unix}'' (F1-Score: 0.75) and ``\texttt{Databases}'' (F1-Score: 0.73)
-\end{itemize}
-
-\subsubsection*{Weaknesses}
-\begin{itemize}
-    \item Slight performance decrease compared to the 50D model (accuracy dropped by 0.69{\%})
-    \item Continued issues with low recall, particularly for ``\texttt{Network Security}'' (0.25)
-    \item The ``\texttt{Other}'' category shows significant precision-recall imbalance (0.52 vs 0.99)
-\end{itemize}
-
-\subsection{One-Step GloVe.6B.200D System}
-The One-Step GloVe.6B.200D system uses 200-dimensional GloVe word embeddings. This system achieved an overall accuracy of 58.57{\%} with a hamming loss of 0.084.
+\subsection{Per-Label Candidates}
+Table~\ref{tab:selected-candidates} lists, for each level, the candidate selected for each label with the selected embedder, written as method[base classifier] (BR, CLR, CC, LP, PSt, MBR, RAkEL, HOMER with the base classifiers LR, DT, and RF). The candidate of each label is the one with the highest pooled out-of-fold F1 on that label.
 
 \begin{table}
     \centering
-    \begin{tabular}{|r|rrrrr||}
+    \caption{\textbf{Selected candidate for each label} of each level.}
+    \label{tab:selected-candidates}
+    \footnotesize
+    \begin{tabular}{lll}
         \hline
-                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \textbf{Level (embedder)} & \textbf{Label} & \textbf{Candidate} \\
         \hline
-        \textbf{Computer Security}     & 0.94               & 0.36            & 0.52              & 0.67         & 1738             \\
-        \textbf{Hardware}              & 0.96               & 0.34            & 0.51              & 0.67         & 461              \\
-        \textbf{Networking}            & 0.93               & 0.32            & 0.47              & 0.66         & 240              \\
-        \textbf{Operating Systems}     & 0.92               & 0.56            & 0.70              & 0.78         & 156              \\
-        \textbf{Other}                 & 0.52               & 0.99            & 0.68              & 0.70         & 1603             \\
-        \textbf{Software}              & 0.94               & 0.54            & 0.69              & 0.76         & 950              \\
-        \textbf{Antivirus and Malware} & 0.92               & 0.43            & 0.59              & 0.71         & 1110             \\
-        \textbf{Network Security}      & 0.86               & 0.25            & 0.38              & 0.62         & 817              \\
-        \textbf{Linux}                 & 0.91               & 0.66            & 0.77              & 0.83         & 77               \\
-        \textbf{MacOS}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
-        \textbf{Unix}                  & 0.82               & 0.64            & 0.72              & 0.82         & 14               \\
-        \textbf{Windows}               & 0.87               & 0.43            & 0.58              & 0.72         & 46               \\
-        \textbf{Databases}             & 0.85               & 0.64            & 0.73              & 0.82         & 342              \\
-        \textbf{Computer}              & 0.91               & 0.35            & 0.51              & 0.68         & 362              \\
-        \textbf{Computer Components}   & 0.92               & 0.32            & 0.47              & 0.66         & 38               \\
-        \textbf{Computer Networking}   & 1.00               & 0.34            & 0.51              & 0.67         & 38               \\
+        Two-Step general (ATT{\&}CK-BERT) & Computer Security & RAkEL[RF] \\
+         & Hardware & MBR[RF] \\
+         & Networking & LP[LR] \\
+         & Operating Systems & RAkEL[LR] \\
+         & Other & HOMER[RF] \\
+         & Software & HOMER[RF] \\
         \hline
+        Computer Security (GloVe.6B.200D) & Antivirus and Malware & MBR[RF] \\
+         & Network Security & MBR[RF] \\
+         & Other & MBR[DT] \\
         \hline
-        \textbf{Micro Avg}             & 0.71               & 0.52            & 0.60              & 0.75         & 8005             \\
-        \textbf{Macro Avg}             & 0.89               & 0.48            & 0.59              & 0.72         & 8005             \\
-        \textbf{Weighted Avg}          & 0.84               & 0.52            & 0.58              & 0.70         & 8005             \\
-        \textbf{Samples Avg}           & 0.62               & 0.62            & 0.62              & 0.79         & 8005             \\
+        Hardware (SBERT) & Computer & CLR[RF] \\
+         & Computer Components & MBR[LR] \\
+         & Computer Networking & CC[LR] \\
+         & Other & CLR[LR] \\
         \hline
-        \multicolumn{6}{l}{\textbf{Accuracy:} 58.57\%}                                                                              \\
-        \multicolumn{6}{l}{\textbf{Hamming Loss:} 0.084}                                                                            \\
+        Operating Systems (DistilRoBERTa) & Linux & MBR[DT] \\
+         & MacOS & LP[LR] \\
+         & Other & RAkEL[LR] \\
+         & Unix & HOMER[LR] \\
+         & Windows & CLR[LR] \\
         \hline
+        Software (DistilRoBERTa) & Databases & BR[LR] \\
+         & Other & BR[RF] \\
         \hline
-    \end{tabular}
-    \caption{\textbf{One-Step GloVe.6B.200D System Performances}.}
-\end{table}
-
-\subsubsection*{Strengths}
-\begin{itemize}
-    \item Improved performance on ``\texttt{Software}'' category (F1-Score: 0.69) compared to previous models
-    \item Strong performance on ``\texttt{Linux}'' (F1-Score: 0.77) and ``\texttt{Databases}'' (F1-Score: 0.73)
-    \item Better micro-average recall (0.52) than the 100D model
-\end{itemize}
-
-\subsubsection*{Weaknesses}
-\begin{itemize}
-    \item Still struggles with ``\texttt{Network Security}'' (F1-Score: 0.38)
-    \item Limited improvement in overall metrics despite increased embedding dimensions
-    \item Consistent recall challenges across most technical categories
-\end{itemize}
-
-\subsection{One-Step GloVe.6B.300D System}
-The One-Step GloVe.6B.300D system implements 300-dimensional GloVe word embeddings. This system achieved an overall accuracy of 58.74{\%} with a hamming loss of 0.083.
-
-\begin{table}
-    \centering
-    \begin{tabular}{|r|rrrrr||}
-        \hline
-                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
-        \hline
-        \textbf{Computer Security}     & 0.94               & 0.37            & 0.53              & 0.68         & 1738             \\
-        \textbf{Hardware}              & 0.97               & 0.36            & 0.52              & 0.68         & 461              \\
-        \textbf{Networking}            & 0.95               & 0.33            & 0.48              & 0.66         & 240              \\
-        \textbf{Operating Systems}     & 0.94               & 0.54            & 0.69              & 0.77         & 156              \\
-        \textbf{Other}                 & 0.53               & 0.98            & 0.69              & 0.71         & 1603             \\
-        \textbf{Software}              & 0.93               & 0.54            & 0.68              & 0.76         & 950              \\
-        \textbf{Antivirus and Malware} & 0.92               & 0.45            & 0.60              & 0.72         & 1110             \\
-        \textbf{Network Security}      & 0.88               & 0.25            & 0.39              & 0.62         & 817              \\
-        \textbf{Linux}                 & 0.98               & 0.64            & 0.77              & 0.82         & 77               \\
-        \textbf{MacOs}                 & 1.00               & 0.46            & 0.63              & 0.73         & 13               \\
-        \textbf{Unix}                  & 0.82               & 0.64            & 0.72              & 0.82         & 14               \\
-        \textbf{Windows}               & 0.86               & 0.41            & 0.56              & 0.71         & 46               \\
-        \textbf{Databases}             & 0.87               & 0.65            & 0.74              & 0.82         & 342              \\
-        \textbf{Computer}              & 0.91               & 0.38            & 0.53              & 0.69         & 362              \\
-        \textbf{Computer Components}   & 0.86               & 0.32            & 0.46              & 0.66         & 38               \\
-        \textbf{Computer Networking}   & 0.93               & 0.37            & 0.53              & 0.68         & 38               \\
-        \hline
-        \hline
-        \textbf{Micro Avg}             & 0.72               & 0.53            & 0.61              & 0.75         & 8005             \\
-        \textbf{Macro Avg}             & 0.89               & 0.48            & 0.60              & 0.72         & 8005             \\
-        \textbf{Weighted Avg}          & 0.84               & 0.53            & 0.59              & 0.70         & 8005             \\
-        \textbf{Samples Avg}           & 0.63               & 0.62            & 0.62              & 0.80         & 8005             \\
-        \hline
-        \multicolumn{6}{l}{Accuracy: 58.74\%}                                                                                       \\
-        \multicolumn{6}{l}{Hamming Loss: 0.083}                                                                                     \\
-        \hline
+        One-Step top level (SBERT) & Computer Security & MBR[RF] \\
+         & Hardware & MBR[RF] \\
+         & Networking & PSt(pruning 25, 2 reintroduced)[LR] \\
+         & Operating Systems & RAkEL[LR] \\
+         & Other & CLR[RF] \\
+         & Software & HOMER[RF] \\
         \hline
     \end{tabular}
-    \caption{\textbf{One-Step GloVe.6B.300D System Performances}.}
 \end{table}
 
-\subsubsection*{Strengths}
-\begin{itemize}
-    \item Highest accuracy among GloVe embedding models
-    \item Improved performance on ``\texttt{Databases}'' (F1-Score: 0.74)
-    \item Best overall precision-recall balance among GloVe models
-\end{itemize}
-
-\subsubsection*{Weaknesses}
-\begin{itemize}
-    \item Still shows significant weaknesses in ``\texttt{Network Security}'' classification
-    \item Limited gains from increased dimensionality
-    \item MacOS and specialty categories continue to have low recall despite high precision
-\end{itemize}
-
-\subsection{One-Step SBERT System}
-The One-Step SBERT system utilizes Sentence-BERT embeddings, contextual embeddings that capture semantic meaning at the sentence level. This system achieved an overall accuracy of 59.40{\%} with a hamming loss of 0.082.
-
-\begin{table}
-    \centering
-    \begin{tabular}{|r|rrrrr||}
-        \hline
-                                       & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
-        \hline
-        \textbf{Computer Security}     & 0.92               & 0.41            & 0.57              & 0.69         & 1738             \\
-        \textbf{Hardware}              & 0.99               & 0.35            & 0.52              & 0.68         & 461              \\
-        \textbf{Networking}            & 0.95               & 0.31            & 0.47              & 0.65         & 240              \\
-        \textbf{Operating Systems}     & 0.93               & 0.54            & 0.69              & 0.77         & 156              \\
-        \textbf{Other}                 & 0.53               & 0.98            & 0.69              & 0.71         & 1603             \\
-        \textbf{Software}              & 0.92               & 0.53            & 0.67              & 0.76         & 950              \\
-        \textbf{Antivirus and Malware} & 0.88               & 0.49            & 0.63              & 0.73         & 1110             \\
-        \textbf{Network Security}      & 0.85               & 0.27            & 0.41              & 0.63         & 817              \\
-        \textbf{Linux}                 & 0.96               & 0.62            & 0.76              & 0.81         & 77               \\
-        \textbf{MacOs}                 & 1.00               & 0.38            & 0.56              & 0.69         & 13               \\
-        \textbf{Unix}                  & 0.82               & 0.64            & 0.72              & 0.82         & 14               \\
-        \textbf{Windows}               & 0.85               & 0.48            & 0.61              & 0.74         & 46               \\
-        \textbf{Databases}             & 0.86               & 0.63            & 0.73              & 0.81         & 342              \\
-        \textbf{Computer}              & 0.92               & 0.36            & 0.52              & 0.68         & 362              \\
-        \textbf{Computer Components}   & 1.00               & 0.37            & 0.54              & 0.68         & 38               \\
-        \textbf{Computer Networking}   & 1.00               & 0.42            & 0.59              & 0.71         & 38               \\
-        \hline
-        \hline
-        \textbf{Micro Avg}             & 0.72               & 0.54            & 0.62              & 0.76         & 8005             \\
-        \textbf{Macro Avg}             & 0.90               & 0.49            & 0.60              & 0.72         & 8005             \\
-        \textbf{Weighted Avg}          & 0.83               & 0.54            & 0.60              & 0.71         & 8005             \\
-        \textbf{Samples Avg}           & 0.64               & 0.63            & 0.63              & 0.80         & 8005             \\
-        \hline
-        \multicolumn{6}{l}{Accuracy: 59.40\%}                                                                                       \\
-        \multicolumn{6}{l}{Hamming Loss: 0.082}                                                                                     \\
-        \hline
-        \hline
-    \end{tabular}
-    \caption{\textbf{One-Step SBERT System Performances}.}
-\end{table}
-
-\subsubsection*{Strengths}
-\begin{itemize}
-    \item Best overall performance among all tested systems
-    \item Highest F1-scores for critical categories like ``\texttt{Antivirus and Malware}'' (0.63)
-    \item Improved recall for ``\texttt{Network Security}'' (0.27) and ``\texttt{Windows}'' (0.48)
-    \item Perfect precision (1.00) for ``\texttt{Computer Components}'', ``\texttt{Computer Networking}'', and ``\texttt{MacOS}''
-    \item Best micro-average recall (0.54) and F1-score (0.62) among all models
-\end{itemize}
-
-\subsubsection*{Weaknesses}
-\begin{itemize}
-    \item Still shows precision-recall imbalance across most categories
-    \item The ``\texttt{Other}'' category continues to have low precision (0.53) but very high recall (0.98)
-\end{itemize}
-
-\subsection{Comparative Analysis}
-When comparing all five systems, several patterns emerge:
-
-\begin{enumerate}
-    \item \textbf{Dimensional Scaling Effects}. Increasing the dimensionality of GloVe embeddings from 50D to 300D showed modest improvements (58.64{\%} to 58.74{\%} accuracy), suggesting diminishing returns from simply adding more dimensions.
-    \item \textbf{Embedding Quality vs.\ Dimensionality}. Despite potentially lower dimensionality, the SBERT system outperformed all GloVe models, highlighting that embeddings' quality and contextual nature can be more important than raw dimensionality.
-    \item \textbf{Category-Specific Performance}. All systems performed well on ``\texttt{Linux}'' and ``\texttt{Databases}'' categories, suggesting these topics are well-represented in the training data. Conversely, ``\texttt{Network Security}'' consistently posed challenges across all models, indicating a need for more diverse and representative training examples. Additionally, specialized categories like ``\texttt{MacOS}'' and ``\texttt{Unix}'' showed high precision but limited recall across all models.
-    \item \textbf{Precision-Recall Trade-offs}. Every system demonstrated a significant imbalance between precision and recall, with precision consistently higher. This suggests the models are conservative in their predictions, preferring to avoid false positives at the expense of more false negatives.
-    \item \textbf{Best Overall Performance}. The One-Step SBERT System demonstrated the best overall performance metrics, with the highest accuracy (59.40{\%}), lowest hamming loss (0.082), and best micro-averaged F1-score (0.62).
-\end{enumerate}
-
-In conclusion, while all systems demonstrated reasonable performance for technical text classification, the SBERT embeddings provided the most balanced and effective approach. Future work might address the precision-recall imbalance, particularly for specialized technical categories with limited training examples.
 
 %\chapter{Appendix B}\label{ch:mlcclasses}
 

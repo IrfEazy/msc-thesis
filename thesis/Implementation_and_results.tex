@@ -1,271 +1,342 @@
 \chapter{Experimental Results}\label{ch:experimental-results}
-This project aimed to build a system that organizes and sorts posts about cybersecurity to raise awareness of critical security issues. The system's design is shown in Figure~\ref{fig:two-step-system}. It consists of two main parts: one part filters out unimportant posts, and another sorts the critical posts into different categories. By identifying and highlighting relevant security information, this system helps focus attention on useful content from the vast repository of social media posts. The system was tested using a collection of posts focused on cybersecurity topics. Each part was evaluated to evaluate how well it worked independently, looking specifically at the filtering and categorizing functions. This chapter presents the results of these tests, focusing on how well the systems that make binary decisions and the systems that handle multiple categories performed.
+This chapter reports the results of the experiments designed in Chapter~\ref{ch:methodology}. The system, shown in Figure~\ref{fig:two-step-system}, filters out the posts that are not relevant to cybersecurity and sorts the relevant ones into hierarchical categories. Each component was first evaluated independently, and the two complete systems were then compared end to end. All the results are computed once on the test partition, which was not used for fitting, model selection, or tuning, and are reported with 95{\%} group-bootstrap confidence intervals (in square brackets) as defined in Section~\ref{subsec:evaluation-metrics}. The out-of-fold and cross-validation scores used for selection are optimistic by construction and are reported only as diagnostics.
 
 The chapter is divided into the following sections:
 \begin{itemize}
-    \item Section~\ref{sec:binary-classifiers-evaluation} explains the performance of the binary classifiers used in the filtering part.
-    \item Section~\ref{sec:multi-label-classification-problem} examines the performance of the categorizing part, discussing both the Two-Step System and the One-Step System in Sections~\ref{subsec:two-step-system} and~\ref{subsec:one-step-system-imp-and-rsl}.
-    \item Section~\ref{subsec:one-step-attack-bert-system} compares the One-Step System with the One-Step ATT{\&}CK-BERT System.
+    \item Section~\ref{sec:binary-classifiers-evaluation} reports the Filter module: the selection diagnostics of the 28 candidates, the tuned model on the test partition, and its external evaluation on NistPosts.
+    \item Section~\ref{sec:multi-label-classification-problem} examines the categorization part, with the five levels of the Two-Step System in Section~\ref{subsec:two-step-system} and the top-level categorizer of the One-Step System, including its implicit relevance, in Section~\ref{subsec:one-step-system-imp-and-rsl}.
+    \item Section~\ref{sec:system-evaluation} compares the Two-Step System and the One-Step System end to end on the public labels, with paired differences, routing counts, and the external evaluation on NistPosts.
+    \item Appendix~\ref{ch:appendix-a} lists the selection diagnostics of each categorization level.
 \end{itemize}
 
 
 \section{Binary Classifiers Evaluation}\label{sec:binary-classifiers-evaluation}
-The binary classifiers were trained to implement the Filter module. The experiments run in this phase showed that the embeddings impacted the model's training.
+The Filter module was selected among the 28 candidates described in Section~\ref{subsec:classification-models}. Table~\ref{tab:filter-module} reports, for each candidate, the mean over the five grouped inner folds of the training partition (percentages). These scores are selection diagnostics: they are computed on the training folds, and being the maximum over 28 candidates they are optimistic with respect to the test performance.
 
 \begin{table}
     \centering
-    \begin{tabular}{cc}
-        \begin{tabular}{r}
-            \\
-            \\
-            GloVe      \\
-            6B 50D     \\
-            \\
-            \\
-            GloVe      \\
-            6B 100D    \\
-            \\
-            \\
-            GloVe      \\
-            6B 200D    \\
-            \\
-            \\
-            GloVe      \\
-            6B 300D    \\
-            \\
-            \\
-            Distil-    \\
-            RoBERTa    \\
-            \\
-            \\
-            SBERT      \\
-            \\
-            \\
-            \\
-            ATT{\&}CK- \\
-            BERT       \\
-            \\
-        \end{tabular} & \begin{tabular}{c|c|c|c|c|c|c||}
-                            \hline
-                                        & Accuracy       & Precision      & Recall         & F1             & AUC            & CV Acc         \\
-                            \hline
-                            LR          & 74.51          & 74.58          & 77.73          & 76.12          & 83.71          & 74.98          \\
-                            GNB         & 67.88          & 70.87          & 64.45          & 67.51          & 75.62          & 69.17          \\
-                            \textbf{RF} & \textbf{79.33} & \textbf{81.61} & 77.62          & 79.56          & 87.26          & \textbf{79.64} \\
-                            XGB         & 79.22          & 80.71          & \textbf{78.85} & \textbf{79.77} & \textbf{87.29} & 79.36          \\
-                            \hline
-                            LR          & 75.29          & 75.80          & 77.33          & 76.56          & 84.33          & 75.51          \\
-                            GNB         & 66.97          & 68.62          & 67.27          & 67.94          & 75.25          & 68.17          \\
-                            \textbf{RF} & 78.68          & \textbf{81.65} & 75.82          & 78.62          & 86.81          & \textbf{79.08} \\
-                            XGB         & \textbf{79.05} & 80.99          & \textbf{77.90} & \textbf{79.42} & \textbf{87.16} & 78.98          \\
-                            \hline
-                            LR          & 77.03          & 78.23          & 77.39          & 77.81          & 85.53          & 76.85          \\
-                            GNB         & 68.57          & 72.79          & 62.43          & 67.21          & 76.03          & 69.15          \\
-                            \textbf{RF} & 78.99          & \textbf{81.81} & 76.38          & 79.00          & 87.07          & \textbf{79.77} \\
-                            XGB         & \textbf{79.53} & 81.25          & \textbf{78.74} & \textbf{79.98} & \textbf{87.48} & 79.62          \\
-                            \hline
-                            LR          & 76.90          & 78.33          & 76.83          & 77.57          & 85.84          & 77.59          \\
-                            GNB         & 66.62          & 74.86          & 52.25          & 61.54          & 76.43          & 67.46          \\
-                            \textbf{RF} & 79.20          & \textbf{82.19} & 76.32          & 79.15          & 86.99          & \textbf{79.77} \\
-                            XGB         & \textbf{79.26} & 81.40          & \textbf{77.78} & \textbf{79.55} & \textbf{87.43} & 79.75          \\
-                            \hline
-                            LR          & 79.06          & 80.41          & 78.97          & 79.68          & 87.98          & 79.39          \\
-                            GNB         & 76.78          & 75.79          & \textbf{81.89} & 78.72          & 84.48          & 76.85          \\
-                            \textbf{RF} & \textbf{81.37} & \textbf{82.58} & 81.33          & \textbf{81.95} & 88.73          & \textbf{81.21} \\
-                            XGB         & 80.44          & 81.29          & 81.10          & 81.19          & \textbf{88.79} & 80.62          \\
-                            \hline
-                            LR          & 79.83          & 80.81          & 80.31          & 80.56          & 88.10          & 79.01          \\
-                            GNB         & 77.27          & 75.89          & \textbf{83.18} & 79.37          & 84.52          & 77.22          \\
-                            \textbf{RF} & \textbf{81.16} & \textbf{82.76} & 80.48          & \textbf{81.61} & \textbf{88.94} & \textbf{81.34} \\
-                            XGB         & 80.75          & 82.32          & 80.15          & 81.22          & 88.79          & 80.34          \\
-                            \hline
-                            LR          & 79.73          & 80.57          & 80.48          & 80.53          & 87.60          & 78.56          \\
-                            GNB         & 77.06          & 77.20          & 79.58          & 78.37          & 84.08          & 76.20          \\
-                            \textbf{RF} & \textbf{81.27} & \textbf{82.69} & 80.88          & 81.77          & 88.77          & \textbf{80.96} \\
-                            XGB         & 81.19          & 82.26          & \textbf{81.38} & \textbf{81.82} & \textbf{89.08} & 80.45          \\
-                            \hline
-                            \hline
-                        \end{tabular} \\
-    \end{tabular}
-    \caption{\textbf{Performances of Binary Classifiers} over test set of , with \texttt{CV = 5}.}
+    \caption{\textbf{Selection diagnostics of the 28 Filter candidates} (mean over the five grouped inner folds of the training partition, in percent; CV Std is the standard deviation of the balanced accuracy over the folds).}
     \label{tab:filter-module}
+    \footnotesize
+    \begin{tabular}{lrrrrrrr}
+        \hline
+        \textbf{Model} & \textbf{CV Bal.\ Acc.} & \textbf{CV Std} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{ROC AUC} \\
+        \hline
+        RF SBERT & 79.43 & 1.75 & 79.42 & 80.88 & 79.45 & 80.08 & 88.04 \\
+        RF DistilRoBERTa & 79.05 & 2.24 & 79.02 & 80.91 & 78.42 & 79.54 & 87.87 \\
+        XGB SBERT & 78.88 & 1.80 & 78.89 & 80.18 & 79.20 & 79.61 & 87.53 \\
+        RF ATT{\&}CK-BERT & 78.74 & 2.02 & 78.73 & 80.29 & 78.62 & 79.36 & 87.20 \\
+        XGB DistilRoBERTa & 78.74 & 1.78 & 78.71 & 80.42 & 78.16 & 79.26 & 87.10 \\
+        XGB ATT{\&}CK-BERT & 78.41 & 1.74 & 78.42 & 79.51 & 79.00 & 79.22 & 86.89 \\
+        LR SBERT & 77.88 & 2.43 & 77.93 & 78.84 & 79.20 & 78.90 & 86.21 \\
+        LR ATT{\&}CK-BERT & 77.40 & 2.29 & 77.47 & 77.98 & 79.32 & 78.57 & 85.85 \\
+        GNB SBERT & 77.14 & 2.58 & 77.36 & 76.10 & 82.74 & 79.20 & 84.00 \\
+        GNB DistilRoBERTa & 77.13 & 2.30 & 77.31 & 76.51 & 81.73 & 78.95 & 83.73 \\
+        XGB GloVe.6B.300D & 77.11 & 1.35 & 77.15 & 77.99 & 78.18 & 78.05 & 85.75 \\
+        LR DistilRoBERTa & 77.08 & 1.93 & 77.17 & 77.52 & 79.37 & 78.36 & 86.05 \\
+        RF GloVe.6B.200D & 76.85 & 1.38 & 76.85 & 78.29 & 76.85 & 77.54 & 85.03 \\
+        RF GloVe.6B.50D & 76.57 & 1.32 & 76.61 & 77.58 & 77.50 & 77.50 & 85.10 \\
+        LR GloVe.6B.200D & 76.41 & 2.25 & 76.39 & 78.09 & 76.07 & 77.01 & 83.85 \\
+        XGB GloVe.6B.200D & 76.31 & 1.39 & 76.37 & 77.14 & 77.67 & 77.36 & 85.30 \\
+        GNB ATT{\&}CK-BERT & 76.29 & 2.67 & 76.38 & 76.73 & 78.62 & 77.61 & 82.97 \\
+        RF GloVe.6B.300D & 76.22 & 1.43 & 76.21 & 77.76 & 76.07 & 76.87 & 84.57 \\
+        XGB GloVe.6B.100D & 76.20 & 0.93 & 76.26 & 76.96 & 77.70 & 77.27 & 84.83 \\
+        XGB GloVe.6B.50D & 76.16 & 1.69 & 76.24 & 76.63 & 78.24 & 77.40 & 85.05 \\
+        LR GloVe.6B.300D & 76.16 & 2.43 & 76.16 & 77.57 & 76.37 & 76.89 & 84.16 \\
+        RF GloVe.6B.100D & 75.99 & 1.27 & 75.99 & 77.43 & 76.13 & 76.73 & 84.55 \\
+        LR GloVe.6B.100D & 75.26 & 2.08 & 75.31 & 76.25 & 76.58 & 76.31 & 82.79 \\
+        LR GloVe.6B.50D & 74.95 & 2.26 & 75.05 & 75.45 & 77.31 & 76.27 & 82.98 \\
+        GNB GloVe.6B.50D & 69.00 & 2.19 & 68.89 & 71.81 & 66.04 & 68.75 & 76.25 \\
+        GNB GloVe.6B.200D & 67.70 & 2.62 & 67.41 & 72.47 & 60.34 & 65.80 & 76.41 \\
+        GNB GloVe.6B.300D & 67.30 & 4.07 & 66.71 & 76.12 & 52.57 & 62.16 & 76.58 \\
+        GNB GloVe.6B.100D & 67.12 & 2.04 & 67.18 & 68.47 & 68.46 & 68.43 & 76.21 \\
+        \hline
+    \end{tabular}
 \end{table}
 
-The Table~\ref{tab:filter-module} shows that some classifiers, like Random Forest (RF) and XGBoost (XGB), work better than others, such as Logistic Regression (LR) and Gaussian Naïve Bayes (GNB). RF and XGB have higher accuracy, F1 scores, and AUC values with all text data types. This means these methods use advanced techniques that handle complex text relationships well.
+Table~\ref{tab:filter-module} shows that the candidates built on Random Forest (RF) and XGBoost (XGB) with the encoder embeddings (SBERT, DistilRoBERTa, and ATT{\&}CK-BERT) have the highest balanced accuracy (78.41{\%} to 79.43{\%}), while Gaussian Naïve Bayes (GNB) with GloVe embeddings is the weakest family (67.12{\%} to 69.00{\%}). The differences among the best candidates are smaller than the fold-to-fold standard deviation (1.75 to 2.24 percentage points), so the ranking among them is not conclusive. The static GloVe embeddings are below the encoders for the same classifier in almost all cases, and the GloVe dimensionality has no clear monotonic effect. Random Forest with SBERT obtained the highest mean balanced accuracy (79.43{\%}) and was selected.
 
-The text representation, called embeddings, also influences model performance. For example, GloVe, a static embedding, slightly improves accuracy when the data representation size increases, raising accuracy from 74.51{\%} to 76.90{\%}. However, context-aware embeddings achieve the best results. They provide higher accuracy (around 81{\%}) and F1 scores (around 81{\%} and 82{\%}) for RF and XGB. Conversely, GNB struggles with complex data, showing lower recall and F1 scores, especially with more significant GloVe embeddings. GNB assumes all features are independent, which isn't always true in text data.
+The selected candidate was tuned with 100 TPE evaluations; the resulting hyperparameters are \texttt{n\_estimators} = 340, \texttt{max\_depth} = 22, \texttt{max\_features} = \texttt{sqrt}, \texttt{min\_samples\_leaf} = 3, and \texttt{min\_samples\_split} = 14. Its mean grouped cross-validation balanced accuracy is 80.05{\%} (standard deviation 1.97) against 79.43{\%} for the untuned candidate. Table~\ref{tab:filter-test} reports the evaluation on the test partition (4,271 posts, 2,220 of them relevant, prevalence 0.520) of the tuned model and of the untuned reference.
 
-AUC values, indicating how well models differentiate between things, are high, between 83{\%} and 89{\%} for all models and embeddings. This means the models effectively distinguish different texts, even if their accuracy varies. In areas like cybersecurity, where understanding text nuances is essential, context-aware embeddings outperform static ones by more effectively capturing crucial details and security clues.
+\begin{table}
+    \centering
+    \caption{\textbf{Filter module on the test partition}: tuned Random Forest with SBERT embeddings and the untuned reference (95{\%} group-bootstrap confidence intervals).}
+    \label{tab:filter-test}
+    \small
+    \begin{tabular}{lcc}
+        \hline
+        \textbf{Metric} & \textbf{Tuned} & \textbf{Untuned reference} \\
+        \hline
+        Balanced accuracy & 0.787 [0.769, 0.808] & 0.787 [0.766, 0.806] \\
+        Accuracy & 0.788 [0.769, 0.809] & 0.787 [0.767, 0.806] \\
+        Precision & 0.795 [0.765, 0.824] & 0.798 [0.770, 0.826] \\
+        Recall & 0.798 [0.770, 0.826] & 0.789 [0.759, 0.818] \\
+        F1 & 0.796 [0.774, 0.820] & 0.794 [0.771, 0.816] \\
+        ROC AUC & 0.876 [0.859, 0.891] & 0.871 [0.854, 0.887] \\
+        \hline
+    \end{tabular}
+\end{table}
 
-These results are particularly significant in the context of cybersecurity awareness. The high-performing models can effectively identify posts containing valuable security information, ensuring that critical advisories and updates reach those who need them while filtering out irrelevant content that might otherwise overwhelm security professionals and interested users.
+The test balanced accuracy of the tuned filter (0.787) is lower than its cross-validation estimate (80.05{\%}), as expected for a score used in selection, but within the confidence interval of the test estimate. Tuning did not produce a measurable gain over the untuned reference: the two have the same balanced accuracy and heavily overlapping intervals on every metric. The confusion matrices on the test partition (rows: true class, columns: predicted class, in the order not relevant, relevant) are $\begin{pmatrix}1593 & 458\\ 448 & 1772\end{pmatrix}$ for the tuned filter and $\begin{pmatrix}1609 & 442\\ 469 & 1751\end{pmatrix}$ for the untuned one. The tuned filter therefore rejects 448 of the 2,220 relevant posts (a false negative rate of 0.202) and accepts 458 of the 2,051 irrelevant ones.
+
+\paragraph{External evaluation on NistPosts.} The tuned filter was also applied to the 22,347 English posts of NistPosts (prevalence of the relevant class 0.733), which were never used for fitting or selection. Since the dataset has no duplicate groups, the intervals resample rows, and the evaluation is descriptive. Balanced accuracy is 0.978 [0.976, 0.980], accuracy 0.976 [0.974, 0.978], precision 0.993 [0.992, 0.994], recall 0.974 [0.971, 0.976], F1 0.983 [0.982, 0.985], and ROC AUC 0.998 [0.998, 0.998]. The confusion matrix is $\begin{pmatrix}5861 & 110\\ 428 & 15948\end{pmatrix}$. These scores are much higher than those obtained on the CyberPosts test partition, consistent with the observation of Section~\ref{sec:datasets-mtd} that the irrelevant posts of NistPosts contain far fewer cybersecurity terms than those of CyberPosts, so that the relevance task is easier on this dataset. They show that the filter transfers to a different source, but they do not measure the performance on the target data.
 
 
 \section{Multi-Label Classification Problem}\label{sec:multi-label-classification-problem}
+This section evaluates each categorizer alone, with the gold labels as input, as defined in Section~\ref{subsec:evaluation-metrics}. The upstream stages therefore do not influence these results.
 
 \subsection{The Two-Step System}\label{subsec:two-step-system}
-The \textbf{Two-Step System} architecture in Figure~\ref{fig:two-step-system} has a strong filtering module but struggles with multi-label classification for some specific categories. The filtering module uses a carefully tuned version of the Random Forest model, trained with SBERT embeddings. You can find details about the base classifier in Table~\ref{tab:filter-module}. This module is good at removing posts that are not relevant and showing high precision and recall. It achieves an F1-score of 82.3{\%}, an AUC of 81.8{\%}, and an accuracy of 81.8{\%}.
+Table~\ref{tab:two-step-levels} summarizes the five levels of the Two-Step System: the embedder selected for each level by the out-of-fold macro F1 (Appendix~\ref{ch:appendix-a}), the number of test posts $n$, and the test metrics over all the test posts of the level, with 95{\%} confidence intervals.
 
 \begin{table}
     \centering
-    \begin{tabular}{|r|rrrrr||}
+    \caption{\textbf{Categorization levels of the Two-Step System} on the test partition (all test posts of each level).}
+    \label{tab:two-step-levels}
+    \footnotesize
+    \resizebox{\textwidth}{!}{\begin{tabular}{llrcccc}
         \hline
-        \textbf{Category}     & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{AUC} & \textbf{Support} \\
+        \textbf{Level} & \textbf{Embedder} & \textbf{$n$} & \textbf{Micro F1} & \textbf{Macro F1} & \textbf{Subset acc.} & \textbf{Macro AUC} \\
         \hline
-        Antivirus And Malware & 0.65               & 0.79            & 0.71              & 0.76         & 857              \\
-        Computer              & 0.61               & 0.38            & 0.47              & 0.67         & 318              \\
-        Computer Components   & 0.00               & 0.00            & 0.00              & 0.50         & 35               \\
-        Computer Networking   & 0.00               & 0.00            & 0.00              & 0.50         & 64               \\
-        Computer Security     & 0.84               & 0.75            & 0.79              & 0.79         & 1164             \\
-        Databases             & 0.00               & 0.00            & 0.00              & 0.50         & 314              \\
-        Hardware              & 0.82               & 0.38            & 0.52              & 0.68         & 429              \\
-        Linux                 & 0.00               & 0.00            & 0.00              & 0.50         & 94               \\
-        Mac Os                & 0.00               & 0.00            & 0.00              & 0.50         & 30               \\
-        Network Security      & 0.00               & 0.00            & 0.00              & 0.50         & 415              \\
-        Networking            & 0.83               & 0.34            & 0.48              & 0.67         & 176              \\
-        Operating Systems     & 0.94               & 0.58            & 0.71              & 0.79         & 227              \\
-        Other                 & 0.51               & 0.84            & 0.63              & 0.81         & 472              \\
-        Software              & 0.86               & 0.65            & 0.74              & 0.80         & 822              \\
-        Unix                  & 0.11               & 0.73            & 0.20              & 0.84         & 22               \\
-        Windows               & 0.00               & 0.00            & 0.00              & 0.50         & 72               \\
+        General & ATT{\&}CK-BERT & 2,220 & 0.666 [0.637, 0.695] & 0.574 [0.537, 0.610] & 0.424 [0.387, 0.459] & 0.801 [0.779, 0.820] \\
+        Computer Security & GloVe.6B.200D & 1,163 & 0.882 [0.861, 0.901] & 0.800 [0.648, 0.871] & 0.779 [0.740, 0.813] & 0.938 [0.910, 0.958] \\
+        Hardware & SBERT & 442 & 0.812 [0.775, 0.846] & 0.689 [0.595, 0.748] & 0.656 [0.581, 0.733] & 0.775 [0.719, 0.814] \\
+        Operating Systems & DistilRoBERTa & 217 & 0.719 [0.629, 0.808] & 0.663 [0.549, 0.780] & 0.599 [0.486, 0.705] & 0.807 [0.735, 0.903] \\
+        Software & DistilRoBERTa & 806 & 0.787 [0.746, 0.824] & 0.755 [0.706, 0.795] & 0.669 [0.606, 0.727] & 0.865 [0.828, 0.896] \\
         \hline
-        \hline
-        Micro Avg             & 0.70               & 0.54            & 0.61              & 0.75         & 5511             \\
-        Macro Avg             & 0.39               & 0.34            & 0.33              & 0.64         & 5511             \\
-        Weighted Avg          & 0.61               & 0.54            & 0.56              & 0.72         & 5511             \\
-        Samples Avg           & 0.67               & 0.59            & 0.61              & 0.77         & 5511             \\
-        \hline
-        \hline
-    \end{tabular}
-    \caption{\textbf{Performances of Two-Step System in Categorization Task}.}
-    \label{tab:two-step-system}
+    \end{tabular}}
 \end{table}
 
-The performance of the Two-Step System, shown in Table~\ref{tab:two-step-system}, highlights significant issues in multi-label classification, even with a strong filtering component. The filtering section performs well, achieving an F1-score of 82.3{\%}, AUC of 81.8{\%}, and accuracy of 81.8{\%}. However, the next step, which handles multi-label classification, shows inconsistent results across different categories.
+The selected embedder differs across levels: the ATT{\&}CK-BERT encoder for the general level, the DistilRoBERTa encoder for the Operating Systems and Software levels, SBERT for Hardware, and the 200-dimensional GloVe embedding for Computer Security. The differences among the embedders in the selection scores are often small (Appendix~\ref{ch:appendix-a}), so the choice should not be read as a ranking of the embedders. The general level is the hardest of the five in terms of subset accuracy (0.424), since it requires the complete set of up to five categories to match. The sub levels have fewer labels and obtain higher scores, but their intervals are wide, especially for the macro F1 of Computer Security (0.648 to 0.871) and for the levels with few test posts (Operating Systems, $n = 217$). The thesis-comparable subsets, restricted to the posts whose label-set satisfies the 20-sample rule, give practically the same values: for the general level (2,216 posts) micro F1 0.668 [0.639, 0.694], macro F1 0.576 [0.535, 0.610], and subset accuracy 0.425 [0.388, 0.459]; for Hardware (424 posts) 0.812, 0.673, and 0.667; for Operating Systems (215 posts) 0.720, 0.664, and 0.605; the Computer Security and Software levels have identical values because all their test posts satisfy the rule.
 
-A closer look at specific categories reveals a troubling pattern: six categories (``\texttt{Computer Components},'' ``\texttt{Computer Networking},'' ``\texttt{Databases},'' ``\texttt{Linux},'' ``\texttt{MacOS},'' ``\texttt{Windows},'' and ``\texttt{Network Security}'') have zero recall and F1-scores. This means the system fails to recognize these categories despite their presence in the test data. The system only does well in categories with a strong presence in the training data, such as ``\texttt{Computer Security}'' with an F1-score of 0.79 and ``\texttt{Antivirus and Malware}'' with an F1-score of 0.71.
+Table~\ref{tab:two-step-general} reports the per-label results of the general level. \texttt{Computer Security} and \texttt{Software}, the most frequent categories, are the best predicted (F1 0.770 and 0.739). \texttt{Hardware}, \texttt{Networking}, and \texttt{Operating Systems} have F1 between 0.402 and 0.463 with recall below 0.40, so these categories are frequently missed; the \texttt{Networking} interval is very wide (0.272 to 0.523). The label \texttt{Other}, which at this level covers the relevant posts without a mapped category, has F1 0.624.
 
-The large gap between the micro-average F1 Score of 0.61 and the macro-average F1 Score of 0.33 shows that the system is biased towards majority classes and struggles with class imbalance. The weighted F1 Score of 0.56 also reflects this imbalance, leading to an overall accuracy of just 33.1{\%} for the whole classification task.
+\begin{table}
+    \centering
+    \caption{\textbf{General level of the Two-Step System}: per-label test results (2,220 relevant test posts).}
+    \label{tab:two-step-general}
+    \small
+    \begin{tabular}{lccccc}
+        \hline
+        \textbf{Label} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 [95{\%} CI]} & \textbf{ROC AUC} & \textbf{Support} \\
+        \hline
+        Computer Security & 0.765 & 0.776 & 0.770 [0.725, 0.808] & 0.819 & 1,163 \\
+        Hardware & 0.531 & 0.382 & 0.445 [0.372, 0.514] & 0.778 & 442 \\
+        Networking & 0.464 & 0.355 & 0.402 [0.272, 0.523] & 0.781 & 183 \\
+        Operating Systems & 0.567 & 0.392 & 0.463 [0.359, 0.571] & 0.790 & 217 \\
+        Other & 0.584 & 0.670 & 0.624 [0.547, 0.696] & 0.790 & 451 \\
+        Software & 0.687 & 0.799 & 0.739 [0.695, 0.775] & 0.844 & 806 \\
+        \hline
+    \end{tabular}
+\end{table}
 
-The main limitations of this system are the information loss during sequential processing, where errors in filtering affect the multi-label classification stage, and the inability to share learned information between the two tasks. The system also struggles with capturing relationships between labels, as seen in the stark performance differences between related categories. Finally, the system has difficulty handling class imbalance in the dataset, leading to poor recall for minority classes.
+Table~\ref{tab:two-step-sub} reports the sub levels. \texttt{Antivirus and Malware} (F1 0.914), \texttt{Computer} (0.885), and \texttt{Other} of the Software level (0.854) are well predicted, mostly because they are majority labels of their level, with recall close to 1 for \texttt{Computer} (0.985) and \texttt{Other} in Software (0.978). The minority labels are harder: \texttt{MacOS} has a recall of 0.292 and an F1 of 0.412 with an interval from 0.162 to 0.741, and a ROC AUC of 0.520, which is close to chance; \texttt{Computer Components}, \texttt{Computer Networking}, \texttt{Unix}, and the \texttt{Other} label of the Computer Security and Hardware levels (11 and 29 test posts) have wide intervals. These per-label results are descriptive, since the small supports leave large uncertainty.
 
-These limitations are significant in cybersecurity awareness contexts, where missing relevant security posts could result in overlooking critical vulnerabilities or threats. Ensuring comprehensive coverage across all security categories becomes essential when the goal is to raise awareness about cybersecurity issues. The One-Step System addresses these issues by integrating filtering and classification into a single framework. This approach removes the dependency on sequential steps and allows optimized model selection for each category. The One-Step System aims to overcome the information bottleneck in the Two-Step setup. Additionally, it handles class imbalance more effectively by using specialized models for minority classes, potentially improving recall for previously undetected categories.
+\begin{table}
+    \centering
+    \caption{\textbf{Sub levels of the Two-Step System}: per-label test results (all test posts of each level).}
+    \label{tab:two-step-sub}
+    \small
+    \begin{tabular}{lccccc}
+        \hline
+        \textbf{Label} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 [95{\%} CI]} & \textbf{ROC AUC} & \textbf{Support} \\
+        \hline
+        \multicolumn{6}{l}{\textit{Computer Security}} \\
+        Antivirus and Malware & 0.874 & 0.958 & 0.914 [0.888, 0.935] & 0.918 & 854 \\
+        Network Security & 0.824 & 0.816 & 0.820 [0.770, 0.860] & 0.939 & 424 \\
+        Other & 0.857 & 0.545 & 0.667 [0.222, 0.882] & 0.958 & 11 \\
+        \hline
+        \multicolumn{6}{l}{\textit{Hardware}} \\
+        Computer & 0.802 & 0.985 & 0.885 [0.844, 0.920] & 0.577 & 342 \\
+        Computer Components & 0.543 & 0.595 & 0.568 [0.404, 0.700] & 0.889 & 42 \\
+        Computer Networking & 0.518 & 0.741 & 0.610 [0.403, 0.750] & 0.849 & 58 \\
+        Other & 0.850 & 0.586 & 0.694 [0.387, 0.836] & 0.786 & 29 \\
+        \hline
+        \multicolumn{6}{l}{\textit{Operating Systems}} \\
+        Linux & 0.779 & 0.763 & 0.771 [0.642, 0.858] & 0.867 & 97 \\
+        MacOS & 0.700 & 0.292 & 0.412 [0.162, 0.741] & 0.520 & 24 \\
+        Other & 0.633 & 0.792 & 0.704 [0.450, 0.901] & 0.905 & 24 \\
+        Unix & 0.585 & 0.750 & 0.658 [0.353, 0.841] & 0.857 & 32 \\
+        Windows & 0.800 & 0.746 & 0.772 [0.614, 0.891] & 0.888 & 59 \\
+        \hline
+        \multicolumn{6}{l}{\textit{Software}} \\
+        Databases & 0.669 & 0.642 & 0.655 [0.571, 0.724] & 0.816 & 302 \\
+        Other & 0.758 & 0.978 & 0.854 [0.811, 0.892] & 0.915 & 504 \\
+        \hline
+    \end{tabular}
+\end{table}
 
 \subsection{The One-Step System}\label{subsec:one-step-system-imp-and-rsl}
+The top-level categorizer of the One-Step System is trained and evaluated on all the posts, with \texttt{Other} covering the irrelevant posts and the relevant posts without a mapped category (Section~\ref{sec:datasets-mtd}). The SBERT embeddings were selected, with an out-of-fold macro F1 of 0.597 against 0.584 for ATT{\&}CK-BERT (Appendix~\ref{ch:appendix-a}). On the 4,271 test posts it obtains a micro F1 of 0.715 [0.693, 0.736], a macro F1 of 0.553 [0.515, 0.591], a weighted F1 of 0.699 [0.676, 0.722], a subset accuracy of 0.621 [0.592, 0.649], a Hamming loss of 0.116 [0.106, 0.125], and a macro ROC AUC of 0.812 [0.794, 0.829]. On the thesis-comparable subset (4,267 posts) the values are practically the same (micro F1 0.716, macro F1 0.554, subset accuracy 0.622). These values are not directly comparable with those of the general level of the Two-Step System, because the populations differ: the One-Step categorizer is evaluated on all the posts, the majority of which have the label \texttt{Other}.
+
 \begin{table}
     \centering
-    \begin{tabular}{|r|rrrrr||}
-        \hline
-        \textbf{Category}     & \textbf{Precision} & \textbf{Recall} & \textbf{F1-score} & \textbf{AUC} & \textbf{Support} \\
-        \hline
-        Computer Security     & 0.94               & 0.43            & 0.59              & 0.70         & 1738             \\
-        Antivirus and Malware & 0.92               & 0.52            & 0.66              & 0.75         & 1110             \\
-        Network Security      & 0.91               & 0.26            & 0.40              & 0.63         & 817              \\
-        Hardware              & 0.98               & 0.37            & 0.54              & 0.68         & 461              \\
-        Computer              & 0.89               & 0.37            & 0.52              & 0.68         & 362              \\
-        Computer Components   & 1.00               & 0.34            & 0.51              & 0.67         & 38               \\
-        Computer Networking   & 1.00               & 0.37            & 0.54              & 0.68         & 38               \\
-        Networking            & 0.79               & 0.33            & 0.46              & 0.66         & 240              \\
-        Operating Systems     & 0.84               & 0.64            & 0.73              & 0.82         & 156              \\
-        Linux                 & 0.88               & 0.73            & 0.79              & 0.86         & 77               \\
-        Mac OS                & 1.00               & 0.54            & 0.70              & 0.77         & 13               \\
-        Unix                  & 0.69               & 0.64            & 0.67              & 0.82         & 14               \\
-        Windows               & 0.67               & 0.52            & 0.59              & 0.76         & 46               \\
-        Other                 & 0.55               & 0.98            & 0.71              & 0.73         & 1603             \\
-        Software              & 0.88               & 0.55            & 0.67              & 0.76         & 950              \\
-        Databases             & 0.89               & 0.62            & 0.73              & 0.81         & 342              \\
-        \hline
-        \hline
-        Micro Avg             & 0.74               & 0.55            & 0.63              & 0.76         & 8005             \\
-        Macro Avg             & 0.86               & 0.51            & 0.61              & 0.74         & 8005             \\
-        Weighted Avg          & 0.84               & 0.55            & 0.61              & 0.72         & 8005             \\
-        Samples Avg           & 0.66               & 0.64            & 0.64              & 0.81         & 8005             \\
-        \hline
-        \hline
-    \end{tabular}
-    \caption{\textbf{Performances of One-Step System in Categorization Task}.}
+    \caption{\textbf{Top level of the One-Step System}: per-label test results (4,271 test posts).}
     \label{tab:one-step-system}
+    \small
+    \begin{tabular}{lccccc}
+        \hline
+        \textbf{Label} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 [95{\%} CI]} & \textbf{ROC AUC} & \textbf{Support} \\
+        \hline
+        Computer Security & 0.700 & 0.563 & 0.624 [0.578, 0.670] & 0.842 & 1,163 \\
+        Hardware & 0.544 & 0.253 & 0.346 [0.266, 0.424] & 0.800 & 442 \\
+        Networking & 0.384 & 0.290 & 0.330 [0.193, 0.455] & 0.814 & 183 \\
+        Operating Systems & 0.543 & 0.438 & 0.485 [0.371, 0.585] & 0.781 & 217 \\
+        Other & 0.805 & 0.892 & 0.846 [0.827, 0.863] & 0.808 & 2,502 \\
+        Software & 0.664 & 0.710 & 0.686 [0.639, 0.729] & 0.828 & 806 \\
+        \hline
+    \end{tabular}
 \end{table}
 
-Because the Two-Step System performed poorly, the One-Step System was developed to improve the classification of multiple labels.
+Table~\ref{tab:one-step-system} shows that \texttt{Other} is predicted with an F1 of 0.846 and a recall of 0.892, and \texttt{Computer Security} and \texttt{Software} follow (0.624 and 0.686). \texttt{Hardware} has a recall of only 0.253 and \texttt{Networking} an F1 of 0.330 with a wide interval (0.193 to 0.455). The categorizer is conservative on the mapped categories: for the five mapped labels the precision is higher than the recall, except for \texttt{Software}, where the two are close (0.664 and 0.710) and the recall is higher.
 
-The \textbf{One-Step System} results are shown in Table~\ref{tab:one-step-system}. It is designed to give the best performance for each label by using the model with the highest F1 score. This ensures that all labels are predicted accurately, enhancing the overall classification results.
+\paragraph{Implicit relevance.} The relevance implied by the One-Step System is the prediction of at least one mapped category (Section~\ref{subsec:one-step-system}). Against the gold relevance of the test posts, it obtains a balanced accuracy of 0.733 [0.711, 0.754], an accuracy of 0.727 [0.704, 0.749], a precision of 0.840 [0.806, 0.871], a recall of 0.587 [0.549, 0.627], an F1 of 0.691 [0.659, 0.722], and a ROC AUC of 0.796 [0.774, 0.815]; the confusion matrix (not relevant, relevant) is $\begin{pmatrix}1802 & 249\\ 917 & 1303\end{pmatrix}$. This evaluation must be read with an explicit caveat: since \texttt{Other} also covers the relevant posts without a mapped category, the implicit relevance cannot recognize them by construction. The 2,220 relevant test posts split into 1,769 with at least one mapped category, whose recall is 0.696, and 451 without a mapped category, whose recall is 0.160. Many of the missed relevant posts are therefore posts that the taxonomy does not map, and the recall of the implicit relevance (0.587) is not comparable with the recall of the Filter module (0.798), which targets the relevance annotation itself.
 
-The One-Step System achieves an overall accuracy of 58.91{\%} and a Hamming loss of 0.079. It shows strong performance in categories like ``\texttt{Linux}'' (F1-score: 0.79, AUC: 0.86) and ``\texttt{Operating Systems}'' (F1-score: 0.73, AUC: 0.82). However, it performs less well in categories such as ``\texttt{Network Security}'' (F1-score: 0.40, AUC: 0.63) and ``\texttt{Networking}'' (F1-score: 0.46, AUC: 0.66). The ``\texttt{Other}'' class has a high recall of 0.98, meaning it correctly identifies the most relevant instances, but its precision is lower at 0.55. Overall, the system achieves a weighted average F1-score of 0.61 and an AUC of 0.72, with a macro-averaged AUC of 0.74.
 
-The system works by leveraging different models for labels, as each model might have unique strengths based on the label's characteristics. This approach spreads the prediction tasks across multiple models to reduce errors. Some models are better at handling security-related terms, while others excel at distinguishing between topics. Specific labels are more complex to predict because of imbalanced classes or similar meanings, like ``\texttt{Linux}'' and ``\texttt{Unix}.'' Using specialized models for particular labels helps the system adapt as needed. The system utilizes different models with various embeddings to effectively capture the most relevant information for predicting each category.
+\section{System Evaluation}\label{sec:system-evaluation}
+The Two-Step System and the One-Step System were compared end to end on all the 4,271 test posts, with the public labels (the mapped categories and \texttt{Other}), using the trained components as deployed (Section~\ref{subsec:evaluation-metrics}). In contrast with the previous section, the sub levels receive the predictions of the upstream stages, so that the errors of the filter and of the top level propagate to them.
 
 \begin{table}
     \centering
-    \begin{tabular}{|r|rrrrr||}
+    \caption{\textbf{End-to-end evaluation of the two systems} on all the test posts (public labels, 95{\%} group-bootstrap confidence intervals) and paired differences (Two-Step minus One-Step).}
+    \label{tab:system-end-to-end}
+    \small
+    \begin{tabular}{lccc}
         \hline
-        \textbf{Label} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-score} & \textbf{AUC} & \textbf{Support} \\
+        \textbf{Metric} & \textbf{Two-Step} & \textbf{One-Step} & \textbf{Difference} \\
         \hline
-        Not Relevant   & 0.81               & 0.93            & 0.87              & N/A          & 2444             \\
-        Relevant       & 0.87               & 0.66            & 0.75              & N/A          & 1623             \\
-        \hline
-        \hline
-        Accuracy       & -                  & -               & 0.83              & -            & 4067             \\
-        Macro Avg      & 0.84               & 0.80            & 0.81              & 0.80         & 4067             \\
-        Weighted Avg   & 0.83               & 0.83            & 0.82              & 0.80         & 4067             \\
-        \hline
+        Micro precision & 0.644 [0.616, 0.671] & 0.694 [0.668, 0.719] & -- \\
+        Micro recall & 0.659 [0.630, 0.687] & 0.627 [0.601, 0.653] & -- \\
+        Micro F1 (primary) & 0.651 [0.626, 0.676] & 0.659 [0.635, 0.682] & $-$0.007 [$-$0.030, 0.011] \\
+        Macro F1 & 0.464 [0.422, 0.499] & 0.444 [0.403, 0.480] & 0.019 [$-$0.011, 0.049] \\
+        Subset accuracy & 0.598 [0.567, 0.629] & 0.618 [0.590, 0.646] & $-$0.020 [$-$0.042, $-$0.001] \\
+        Hamming loss & 0.078 [0.071, 0.085] & 0.072 [0.066, 0.078] & -- \\
         \hline
     \end{tabular}
-    \caption{\textbf{One-Step System's Performances in Filter Task}.}
-    \label{tab:one-step-system-filter}
 \end{table}
 
-The system combines the Filter module with the Categorization module. So, it was checked how well the Filter submodule works by examining its predictions for the ``\texttt{Other}'' category.
+Table~\ref{tab:system-end-to-end} reports the results. On the primary endpoint, the micro F1, the two systems are not distinguishable: the paired difference is $-$0.007 and its interval, from $-$0.030 to 0.011, contains zero. The same holds for the macro F1 (difference 0.019, interval from $-$0.011 to 0.049). The two systems differ in the balance between precision and recall: the One-Step System has the higher micro precision (0.694 against 0.644) and the Two-Step System the higher micro recall (0.659 against 0.627). These two differences are point estimates; the paired intervals were predefined only for the micro F1, the macro F1, and the subset accuracy, and the marginal intervals of the recall overlap. The subset accuracy is higher for the One-Step System (0.618 against 0.598), and the paired difference of $-$0.020 has an interval, from $-$0.042 to $-$0.001, whose upper bound is at the boundary of zero; this is weak evidence of a difference in the exact match of the whole label set, to be read together with the absence of a difference on the two F1 scores and with the lack of an adjustment for multiple comparisons. No claim of superiority of either system is supported by these data.
 
-Table~\ref{tab:one-step-system-filter} shows the system effectively distinguishes relevant from non-relevant posts. The Hamming Loss of 0.175 indicates the system makes few prediction errors. It has a high precision (0.87) for the ``\texttt{Relevant}'' class, which usually predicts correctly when identifying relevant posts. However, it has a recall of 0.66, meaning it sometimes misses relevant posts. For the ``\texttt{Not Relevant}'' class, the system has a strong F1-score of 0.87 due to its high recall (0.93), indicating it correctly identifies most non-relevant posts.
-
-The balance between precision and recall shows the system focuses more on recall for the ``\texttt{Not Relevant}'' class. This means it tries hard to correctly identify non-relevant posts, reducing the chance of missing essential cybersecurity posts. The ``\texttt{Relevant}'' class has higher precision than recall, meaning it's usually right when it labels a post as relevant, even if it misses some relevant posts. This balance is essential in cybersecurity awareness, where including some non-important posts is preferable to missing crucial security advisories that could help users protect their systems and data. The macro-averaged F1-score of 0.81 and weighted F1-score of 0.82 show strong overall performance, confirmed by an 83{\%} accuracy rate.
-
-\subsection{The One-Step ATT{\&}CK-BERT System}\label{subsec:one-step-attack-bert-system}
 \begin{table}
     \centering
-    \begin{tabular}{|r|rrrrr||}
+    \caption{\textbf{Per-label end-to-end results} on all the test posts (each cell reports precision / recall / F1 [95{\%} CI]).}
+    \label{tab:system-per-label}
+    \scriptsize
+    \resizebox{\textwidth}{!}{\begin{tabular}{lccr}
         \hline
-        \textbf{Category}     & \textbf{Precision} & \textbf{Recall} & \textbf{F1-score} & \textbf{AUC} & \textbf{Support} \\
+        \textbf{Label} & \textbf{Two-Step} & \textbf{One-Step} & \textbf{Support} \\
         \hline
-        Computer Security     & 0.94               & 0.43            & 0.59              & 0.70         & 1738             \\
-        Antivirus and Malware & 0.92               & 0.52            & 0.67              & 0.75         & 1110             \\
-        Network Security      & 0.91               & 0.26            & 0.41              & 0.63         & 817              \\
-        Hardware              & 0.98               & 0.37            & 0.54              & 0.68         & 461              \\
-        Computer              & 0.93               & 0.37            & 0.53              & 0.68         & 362              \\
-        Computer Components   & 0.93               & 0.34            & 0.50              & 0.67         & 38               \\
-        Computer Networking   & 1.00               & 0.47            & 0.64              & 0.74         & 38               \\
-        Networking            & 0.79               & 0.33            & 0.46              & 0.66         & 240              \\
-        Operating Systems     & 0.84               & 0.64            & 0.73              & 0.82         & 156              \\
-        Linux                 & 0.88               & 0.73            & 0.79              & 0.86         & 77               \\
-        Mac OS                & 1.00               & 0.54            & 0.70              & 0.77         & 13               \\
-        Unix                  & 0.69               & 0.64            & 0.67              & 0.82         & 14               \\
-        Windows               & 0.67               & 0.52            & 0.59              & 0.76         & 46               \\
-        Other                 & 0.55               & 0.98            & 0.71              & 0.73         & 1603             \\
-        Software              & 0.88               & 0.55            & 0.67              & 0.76         & 950              \\
-        Databases             & 0.75               & 0.64            & 0.69              & 0.81         & 342              \\
+        Computer Security & 0.619 / 0.666 / 0.642 [0.598, 0.683] & 0.700 / 0.563 / 0.624 [0.577, 0.668] & 1,163 \\
+        Hardware & 0.460 / 0.364 / 0.407 [0.333, 0.479] & 0.544 / 0.253 / 0.346 [0.264, 0.429] & 442 \\
+        Networking & 0.419 / 0.311 / 0.357 [0.242, 0.463] & 0.384 / 0.290 / 0.330 [0.184, 0.455] & 183 \\
+        Operating Systems & 0.516 / 0.369 / 0.430 [0.314, 0.536] & 0.543 / 0.438 / 0.485 [0.372, 0.586] & 217 \\
+        Software & 0.618 / 0.759 / 0.681 [0.636, 0.722] & 0.664 / 0.710 / 0.686 [0.638, 0.730] & 806 \\
+        Antivirus and Malware & 0.582 / 0.710 / 0.640 [0.587, 0.688] & 0.679 / 0.644 / 0.661 [0.609, 0.708] & 854 \\
+        Network Security & 0.498 / 0.472 / 0.484 [0.412, 0.552] & 0.578 / 0.349 / 0.435 [0.352, 0.517] & 424 \\
+        Computer & 0.365 / 0.348 / 0.356 [0.280, 0.435] & 0.464 / 0.260 / 0.333 [0.242, 0.427] & 342 \\
+        Computer Components & 0.304 / 0.167 / 0.215 [0.082, 0.371] & 0.429 / 0.214 / 0.286 [0.109, 0.462] & 42 \\
+        Computer Networking & 0.466 / 0.466 / 0.466 [0.270, 0.603] & 0.474 / 0.155 / 0.234 [0.075, 0.392] & 58 \\
+        Linux & 0.506 / 0.433 / 0.467 [0.291, 0.619] & 0.581 / 0.515 / 0.546 [0.360, 0.692] & 97 \\
+        MacOS & 0.250 / 0.083 / 0.125 [0.000, 0.333] & 0.000 / 0.000 / 0.000 [0.000, 0.000] & 24 \\
+        Unix & 0.429 / 0.188 / 0.261 [0.000, 0.537] & 0.273 / 0.188 / 0.222 [0.000, 0.488] & 32 \\
+        Windows & 0.538 / 0.475 / 0.505 [0.286, 0.667] & 0.525 / 0.542 / 0.533 [0.337, 0.686] & 59 \\
+        Databases & 0.525 / 0.583 / 0.553 [0.469, 0.630] & 0.547 / 0.560 / 0.553 [0.464, 0.636] & 302 \\
+        Other & 0.830 / 0.830 / 0.830 [0.803, 0.854] & 0.802 / 0.872 / 0.835 [0.815, 0.855] & 2,502 \\
         \hline
-        \hline
-        Micro Avg             & 0.73               & 0.56            & 0.63              & 0.76         & 8005             \\
-        Macro Avg             & 0.85               & 0.52            & 0.62              & 0.74         & 8005             \\
-        Weighted Avg          & 0.83               & 0.56            & 0.61              & 0.72         & 8005             \\
-        Samples Avg           & 0.66               & 0.64            & 0.64              & 0.81         & 8005             \\
-        \hline
-        \hline
-    \end{tabular}
-    \caption{\textbf{Performances of ATT{\&}CK-BERT System in Categorization Task}.}
-    \label{tab:attack-bert-system}
+    \end{tabular}}
 \end{table}
 
-The \textbf{One-Step ATT{\&}CK-BERT System} is designed to sort posts into different categories using multiple models. These models are trained with ATT{\&}CK-BERT embeddings. Various methods are used to train each model to handle multiple categories simultaneously. The best-performing model for each category, based on a measure known as the macro F1 Score, is selected for the final system.
+Table~\ref{tab:system-per-label} shows the per-label results. For the high-level categories the two systems are close: the intervals of the F1 largely overlap, and the Two-Step System has the higher recall for \texttt{Computer Security} (0.666 against 0.563), \texttt{Hardware} (0.364 against 0.253), and \texttt{Software} (0.759 against 0.710), while the One-Step System has the higher precision for \texttt{Computer Security} and \texttt{Hardware}. For the sub levels, the Two-Step System has the higher F1 for \texttt{Network Security} (0.484 against 0.435), \texttt{Computer} (0.356 against 0.333), and \texttt{Computer Networking} (0.466 against 0.234), and the One-Step System for \texttt{Antivirus and Malware} (0.661 against 0.640), \texttt{Computer Components}, \texttt{Linux}, and \texttt{Windows}; given the overlapping intervals these differences are descriptive. The label \texttt{MacOS} is almost never recovered by either system (F1 0.125 and 0.000), and the end-to-end scores of the sub levels are lower than their scores in isolation (Table~\ref{tab:two-step-sub}), because the sub-level classifiers are applied to the posts selected by the upstream stages and not to the posts with the gold parent.
 
-This system achieves a 58.77{\%} accuracy rate and a Hamming loss of 0.079. It performs exceptionally well in specific categories, with an F1 score of 0.79 for the ``\texttt{Linux}'' category. However, there are some trade-offs. In the ``\texttt{Other}'' category, it successfully identifies almost all relevant items (high recall of 0.98) but also includes many irrelevant ones (lower precision of 0.55). It does well in specific areas like ``\texttt{Operating Systems}'' (F1-score = 0.73) and ``\texttt{Databases}'' (F1-score = 0.69) but struggles with more ambiguous categories like ``\texttt{Network Security},'' which could be improved.
+\paragraph{Routing.} Table~\ref{tab:routing} reports how the posts flow through the two systems. The Filter module of the Two-Step System rejects 2,041 of the 4,271 test posts, which receive \texttt{Other}; of the 2,230 accepted posts, the top level predicts \texttt{Other} for 481 (possibly together with mapped categories) and 65 receive it because the top level predicts no category. The One-Step System has no filter; its top level predicts \texttt{Other} for 2,774 posts and predicts no category for 172 posts, which also receive \texttt{Other}. An \texttt{Other} conflict, i.e. the joint prediction of \texttt{Other} and a mapped category resolved by dropping \texttt{Other}, occurs for 84 posts in the Two-Step System and for 227 in the One-Step System. A sub-level \texttt{none} conflict is the co-prediction of the sub-level \texttt{none} class and a real subcategory (Software: 171 and 158 posts). The last rows count the posts for which a parent category was kept because no subcategory was predicted; the large counts for \texttt{Software} (656 and 552) reflect that the \texttt{Software} level has the single subcategory \texttt{Databases}.
 
-The ATT{\&}CK-BERT System shows the same overall accuracy and Hamming loss as the One-Step System, indicating similar errors in classifying each label. This suggests that using only ATT{\&}CK-BERT didn't significantly change the overall performance. The macro F1 Score is slightly better, meaning it performs better across all categories, especially those with fewer examples. However, the micro F1 Score, which focuses on individual cases, remains unchanged.
+\begin{table}
+    \centering
+    \caption{\textbf{Routing counts} on the 4,271 test posts. ``Top level assigns \texttt{Other}'' counts the accepted posts for which the top level predicts \texttt{Other}, possibly together with mapped categories.}
+    \label{tab:routing}
+    \small
+    \begin{tabular}{lrr}
+        \hline
+        \textbf{Event} & \textbf{Two-Step} & \textbf{One-Step} \\
+        \hline
+        Rejected by the filter & 2,041 & -- \\
+        Top level assigns \texttt{Other} & 481 & 2,774 \\
+        No category predicted at the top level & 65 & 172 \\
+        \texttt{Other} conflicts & 84 & 227 \\
+        Sub \texttt{none} conflict: Computer Security & 5 & 1 \\
+        Sub \texttt{none} conflict: Hardware & 28 & 8 \\
+        Sub \texttt{none} conflict: Operating Systems & 3 & 1 \\
+        Sub \texttt{none} conflict: Software & 171 & 158 \\
+        Parent kept without subcategory: Computer Security & 24 & 12 \\
+        Parent kept without subcategory: Hardware & 9 & 2 \\
+        Parent kept without subcategory: Operating Systems & 17 & 22 \\
+        Parent kept without subcategory: Software & 656 & 552 \\
+        \hline
+    \end{tabular}
+\end{table}
 
-There's an improvement in recall in categories such as ``\texttt{Computer Networking}'' but a decrease in precision for ``\texttt{Databases},'' meaning more irrelevant items are included. Both systems perform similarly, though ATT{\&}CK-BERT does slightly better in the ``\texttt{Computer Security}'' subcategories. At the same time, precision drops for ``\texttt{Databases}'' and ``\texttt{Hardware}.'' Using only ATT{\&}CK-BERT embeddings doesn't significantly boost performance. A combination of ATT{\&}CK-BERT with other data representations provides a better balance between precision and recall, as seen in the One-Step System.
+\paragraph{Projections and implicit relevance.} Table~\ref{tab:projections} restricts the end-to-end evaluation to the top-level labels, to the subcategory labels, and to the mapped labels (all labels except \texttt{Other}). The two systems are close on each projection, and the sub-level F1 is well below the top-level one for both, as the errors of the upstream stages accumulate on the sub levels. The implicit relevance, i.e.\ the presence of at least one mapped label, with intervals from the System bootstrap (10,000 resamples) rather than the component bootstrap of Section~\ref{subsec:one-step-system-imp-and-rsl}, gives balanced accuracy 0.742 [0.717, 0.767], precision 0.812 [0.780, 0.842], recall 0.647 [0.601, 0.690], and F1 0.720 [0.687, 0.751] for the Two-Step System, and 0.733 [0.711, 0.754], 0.840 [0.804, 0.871], 0.587 [0.547, 0.625], and 0.691 [0.659, 0.721] for the One-Step System.
 
-These findings have practical importance beyond just academic measurements. In real-world cybersecurity, accurately classifying technical information with high precision leads to better threat detection, improved information sorting, and less work for analysts. The results support the idea that a mix of embeddings is better than using a single type for handling the varied language in cybersecurity.
+\begin{table}
+    \centering
+    \caption{\textbf{Projections of the end-to-end evaluation} on all the test posts (F1 [95{\%} CI]).}
+    \label{tab:projections}
+    \small
+    \begin{tabular}{llcc}
+        \hline
+        \textbf{Projection} & \textbf{Metric} & \textbf{Two-Step} & \textbf{One-Step} \\
+        \hline
+        Top level only & Micro F1 & 0.703 [0.679, 0.727] & 0.709 [0.687, 0.730] \\
+         & Macro F1 & 0.558 [0.523, 0.589] & 0.551 [0.512, 0.587] \\
+        Sub levels only & Micro F1 & 0.530 [0.497, 0.564] & 0.529 [0.489, 0.569] \\
+         & Macro F1 & 0.407 [0.357, 0.451] & 0.380 [0.331, 0.424] \\
+        Mapped labels only & Micro F1 & 0.564 [0.535, 0.593] & 0.558 [0.524, 0.591] \\
+         & Macro F1 & 0.439 [0.395, 0.477] & 0.418 [0.374, 0.456] \\
+        \hline
+    \end{tabular}
+\end{table}
 
-While specialized embeddings like ATT{\&}CK-BERT are useful, combining different embeddings provides a more effective solution for classifying cybersecurity text. This helps advance automated security information processing and can be applied to other specialized technical fields.
+\paragraph{Filter false negatives.} Of the 2,220 gold-relevant test posts, the filter rejects 448, a false negative rate of 0.202 [0.175, 0.230] (recall 0.798 [0.770, 0.825]); the confusion matrix is $[[1593, 458], [448, 1772]]$. Of the rejected posts, 287 [240, 339] carry at least one mapped label and 161 [128, 197] carry only \texttt{Other}-type (unmapped) relevant labels. The 287 posts lose their mapped labels in the Two-Step System irrespective of the later stages.
 
-These findings have practical importance beyond just academic measurements. In raising cybersecurity awareness, accurately classifying technical information with high precision leads to better threat detection, improved information sorting, and less work for analysts trying to identify valuable security content from social media repositories. The results support the idea that a mix of embeddings is better than using a single type for handling the varied language in cybersecurity posts. This helps advance automated security information processing and can improve how we identify and highlight critical information for broader awareness.
+\paragraph{Oracle diagnostics.} Table~\ref{tab:oracle} evaluates each component on the gold population of its level (gold-relevant posts for the top level, gold-parent posts for the sub levels), without upstream errors. The values are close to the per-level results of Tables~\ref{tab:two-step-general} and~\ref{tab:two-step-sub}; for the One-Step top level, trained on all the posts, the same population gives micro F1 0.606 [0.577, 0.635] and macro F1 0.530 [0.487, 0.569]. The end-to-end scores are lower than these oracle values; since the populations and label sets differ, the gap is not a measure of the propagation loss of upstream errors.
+
+\begin{table}
+    \centering
+    \caption{\textbf{Oracle diagnostics} of the Two-Step components on gold populations (F1 [95{\%} CI]).}
+    \label{tab:oracle}
+    \small
+    \begin{tabular}{lrcc}
+        \hline
+        \textbf{Component} & \textbf{n} & \textbf{Micro F1} & \textbf{Macro F1} \\
+        \hline
+        Top level (gold-relevant) & 2,220 & 0.666 [0.636, 0.694] & 0.574 [0.534, 0.609] \\
+        Computer Security (gold parent) & 1,163 & 0.882 [0.860, 0.902] & 0.800 [0.643, 0.876] \\
+        Hardware (gold parent) & 442 & 0.812 [0.777, 0.846] & 0.689 [0.595, 0.752] \\
+        Operating Systems (gold parent) & 217 & 0.719 [0.617, 0.808] & 0.663 [0.546, 0.777] \\
+        Software (gold parent) & 806 & 0.787 [0.745, 0.825] & 0.755 [0.709, 0.798] \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\paragraph{Stage ROC AUC.} The ROC AUC of the relevance decision of the Filter module on all the test posts is 0.876 [0.859, 0.891], the same value as in Section~\ref{sec:binary-classifiers-evaluation}. Table~\ref{tab:stage-auc} reports the macro ROC AUC of the other stages. These values are routing-conditional: the Two-Step stages are evaluated on the posts that reach them (accepted by the filter for the top level, routed to the parent for the sub levels), the One-Step stages on all the posts, so they describe each stage on its own input and do not compare the systems.
+
+\begin{table}
+    \centering
+    \caption{\textbf{Routing-conditional stage ROC AUC} (macro over labels, 95{\%} CI).}
+    \label{tab:stage-auc}
+    \small
+    \begin{tabular}{lcc}
+        \hline
+        \textbf{Stage} & \textbf{Two-Step} & \textbf{One-Step} \\
+        \hline
+        Top level & 0.782 [0.758, 0.804] & 0.812 [0.792, 0.831] \\
+        Computer Security & 0.821 [0.795, 0.847] & 0.821 [0.784, 0.856] \\
+        Hardware & 0.776 [0.732, 0.812] & 0.789 [0.720, 0.828] \\
+        Operating Systems & 0.894 [0.812, 0.951] & 0.874 [0.783, 0.936] \\
+        Software & 0.807 [0.749, 0.859] & 0.816 [0.754, 0.869] \\
+        All sub levels & 0.835 [0.799, 0.862] & 0.832 [0.789, 0.863] \\
+        \hline
+    \end{tabular}
+\end{table}
+
+
+\paragraph{External evaluation on NistPosts.} The implicit relevance of each system was evaluated on the 22,347 posts of NistPosts (prevalence 0.733; descriptive, row bootstrap). For the Two-Step System, a post is relevant if the filter accepts it and a mapped category is predicted: balanced accuracy 0.974 [0.971, 0.976], accuracy 0.967 [0.964, 0.969], precision 0.996 [0.995, 0.997], recall 0.959 [0.956, 0.962], and F1 0.977 [0.975, 0.978]. For the One-Step System, where a post is relevant if a mapped category is predicted: balanced accuracy 0.908 [0.905, 0.912], accuracy 0.882 [0.877, 0.886], precision 0.985 [0.983, 0.987], recall 0.851 [0.846, 0.856], F1 0.913 [0.910, 0.917], and ROC AUC 0.959 [0.956, 0.961]. Both systems reach a high precision, while the One-Step System has a lower recall. Since the two systems are evaluated with different definitions of relevance and on a dataset with a different annotation (the Related label), the comparison is descriptive and does not generalize to the target data.
