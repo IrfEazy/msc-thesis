@@ -2,6 +2,25 @@
 
 Full runs of the Kaggle notebooks (owner `irfancela`; T4 GPU for the 2026-10 runs, CPU kernels since the rebuild). Outputs are in `runs/kaggle/<slug>/` (gitignored); durations and metrics are taken from the fetched kernel logs. Add an entry for each new full run.
 
+## 2026-11-10: System evaluation, Two-Step vs One-Step (CPU kernel)
+Code e1f34f8 (code and data datasets versioned at e1f34f8). `msc-thesis-system-smoke` COMPLETE (SMOKE OK), then `msc-thesis-system` COMPLETE (about 18 min), summary `status complete`, production. Components loaded from the published filter and the six assemble kernels (general = assemble v2, pickle sha b7e2ae03...; all sidecars on manifest 9f8b6285...). Locked protocol in `notebooks/system.toml` (B 10000, seed 20241102). Outputs in `runs/kaggle/msc-thesis-system/system/` (`system_performance.json`, `system_predictions.csv`).
+
+Results (all 4271 test rows, 2875 groups; flattened public labels top + sub + exclusive `other`; 95% group-bootstrap CIs):
+
+| System | micro P | micro R | micro F1 (primary) | macro F1 | subset accuracy | Hamming loss |
+|---|---|---|---|---|---|---|
+| Two-Step | 0.644 [0.616, 0.671] | 0.659 [0.630, 0.687] | 0.651 [0.626, 0.676] | 0.464 [0.422, 0.499] | 0.598 [0.567, 0.629] | 0.078 [0.071, 0.085] |
+| One-Step | 0.694 [0.668, 0.719] | 0.627 [0.601, 0.653] | 0.659 [0.635, 0.682] | 0.444 [0.403, 0.480] | 0.618 [0.590, 0.646] | 0.072 [0.066, 0.078] |
+
+- Paired Two-Step minus One-Step (same resamples, 10000 valid): micro F1 -0.007 [-0.030, 0.011], macro F1 +0.019 [-0.011, 0.049], subset accuracy -0.020 [-0.042, -0.001]. No significant difference on the primary endpoint.
+- Projections (micro / macro F1): top-only Two-Step 0.703 / 0.558, One-Step 0.709 / 0.551; sub-only 0.530 / 0.407 vs 0.529 / 0.380; mapped-only 0.564 / 0.439 vs 0.558 / 0.418.
+- Filter (Two-Step): recall 0.798 [0.770, 0.825], FN rate 0.202, ROC AUC 0.876; confusion [[1593, 458], [448, 1772]]; dropped relevant posts 287 mapped + 161 unmapped.
+- Implicit relevance (any mapped label vs gold relevance): Two-Step balanced accuracy 0.742 [0.717, 0.767], F1 0.720; One-Step 0.733 [0.711, 0.754], F1 0.691.
+- Routing: Two-Step 2041 filter rejects, 65 empty-top fallbacks, 84 `other` conflicts; One-Step 172 fallbacks, 227 conflicts.
+- Oracle stage diagnostics reproduce the assemble test results (general 0.666 / 0.574, computer security 0.882, hardware 0.812, operating systems 0.719, software 0.787 micro F1); One-Step top on gold-relevant rows 0.606 / 0.530.
+- Cotov (22347 English rows, row bootstrap, descriptive): filter decision balanced accuracy 0.978; Two-Step implicit relevance 0.974; One-Step 0.908 (ROC AUC 0.959).
+- Session artifacts (pipeline run, loop logs): `runs/sessions/2026-11-10-system/`.
+
 ## 2026-11-08 to 2026-11-10: One-Step categorisation (CPU kernels)
 Code 18afe65/16cfaa3 (code dataset versioned at 689123d; 044a063 and 3e383b4 changed only `experiments.toml`, so the checkpoint identity is the same). Level `one step` of `categorisation` on all corpus rows; durations from the kernel logs; `done/total` = candidate-fold checkpoints.
 
