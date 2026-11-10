@@ -40,7 +40,6 @@ dataset_ready_timeout = 900  # seconds to wait for each pushed dataset to become
 code_paths = ["utils.py", "preprocess_functions.py", "device.py", "MLC", "notebooks/utils.py", "notebooks/checkpoints.py", "notebooks/textprep.py", "notebooks/taxonomy.py", "notebooks/taxonomy.toml", "notebooks/splits.py", "notebooks/embeddings.py", "notebooks/embedders.toml", "notebooks/filtering.py", "notebooks/filter.toml", "notebooks/categorisation.py", "notebooks/categorisation.toml", "notebooks/system.py", "notebooks/system_eval.py", "notebooks/system_pipeline.py", "notebooks/system.toml", "requirements-kaggle.txt"]
 # Copied into the data dataset.
 data = [
-  { src = "data/tweets-dataset", dest = "tweets-dataset" },
   # Deterministic outputs of `run_notebooks.py --only 'Train-Test split' --out runs/splits`.
   { src = "runs/splits/data", dest = "splits" },
 ]
@@ -52,10 +51,6 @@ timeout = 3600  # per-cell seconds
 
 [env]
 # Defaults applied to every notebook.
-
-[[archives]]
-path = "data/tweets-dataset.zip"
-dest = "data/tweets-dataset"
 
 [[archives]]
 path = "data/tweets-dataset-for-cyberattack-detection.zip"
