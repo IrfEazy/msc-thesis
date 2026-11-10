@@ -91,5 +91,28 @@ class Titles(unittest.TestCase):
         self.assertIn("kernel entry 'Long'", str(cm.exception))
 
 
+class Layout(unittest.TestCase):
+    def test_single_data_entry_gets_layout_file(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            repo = Path(t) / "repo"
+            (repo / "splits").mkdir(parents=True)
+            (repo / "splits" / "a.csv").write_text("x\n")
+            (repo / "pkg").mkdir()
+            (repo / "pkg" / "m.py").write_text("")
+            cfg = {"owner": "o", "code_dataset": "code-ds", "data_dataset": "data-ds",
+                   "code_paths": ["pkg"], "data": [{"src": "splits", "dest": "splits"}]}
+            out = Path(t) / "out"
+            with mock.patch.object(kb, "REPO", repo):
+                kb.build_datasets(cfg, out)
+            data = out / "datasets" / "data"
+            layout = json.loads((data / "LAYOUT.json").read_text())
+            self.assertEqual(layout["entries"], ["splits"])
+            self.assertTrue((data / "splits").is_dir())
+            code = json.loads((out / "datasets" / "code" / "LAYOUT.json").read_text())
+            self.assertEqual(code["entries"], ["pkg"])
+
+
 if __name__ == "__main__":
     unittest.main()

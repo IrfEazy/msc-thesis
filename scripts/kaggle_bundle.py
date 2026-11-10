@@ -281,6 +281,17 @@ def dataset_meta(owner, slug, license_name):
     return {"title": slug, "id": f"{owner}/{slug}", "licenses": [{"name": license_name}]}
 
 
+def write_layout(root):
+    """Write LAYOUT.json listing the top-level entries of a dataset directory.
+
+    Kaggle extracts an upload that is a single archive to the dataset root, which
+    drops a lone top-level directory; a regular file at the root keeps every
+    declared entry a subdirectory.
+    """
+    entries = sorted(p.name for p in root.iterdir() if p.name not in ("dataset-metadata.json", "LAYOUT.json"))
+    write_json(root / "LAYOUT.json", {"entries": entries})
+
+
 def build_datasets(cfg, out):
     code = out / "datasets" / "code"
     data = out / "datasets" / "data"
@@ -290,9 +301,11 @@ def build_datasets(cfg, out):
     for p in cfg["code_paths"]:
         copy_entry(REPO / p, code / p, py_only=True)
     write_json(code / "dataset-metadata.json", dataset_meta(cfg["owner"], cfg["code_dataset"], cfg.get("code_license", "CC0-1.0")))
+    write_layout(code)
     for item in cfg["data"]:
         copy_entry(REPO / item["src"], data / item["dest"], py_only=False)
     write_json(data / "dataset-metadata.json", dataset_meta(cfg["owner"], cfg["data_dataset"], cfg.get("data_license", "unknown")))
+    write_layout(data)
 
 
 def check_placeholders(entry, slugs):
